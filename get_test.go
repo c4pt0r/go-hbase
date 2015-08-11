@@ -2,6 +2,9 @@ package hbase
 
 import (
 	"bytes"
+	"runtime"
+	"strconv"
+	"sync"
 
 	"github.com/c4pt0r/go-hbase/proto"
 	. "gopkg.in/check.v1"
@@ -49,5 +52,26 @@ func (s *HBaseGetTestSuit) TestWithClient(c *C) {
 
 	r, err = s.cli.Get("t1", g)
 	c.Assert(r == nil, Equals, true)
+	c.Assert(err, Equals, nil)
+}
+
+func (s *HBaseGetTestSuit) TestConcurrentGet(c *C) {
+	runtime.GOMAXPROCS(runtime.NumCPU())
+	wg := sync.WaitGroup{}
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			p := NewPut([]byte("test"))
+			p.AddValue([]byte("cf"), []byte("q"), []byte(strconv.Itoa(i)))
+			b, err := s.cli.Put("t2", p)
+			c.Assert(b, Equals, true)
+			c.Assert(err, Equals, nil)
+		}(i)
+	}
+	wg.Wait()
+
+	g := NewGet([]byte("test"))
+	_, err := s.cli.Get("t2", g)
 	c.Assert(err, Equals, nil)
 }
