@@ -35,9 +35,9 @@ type Scan struct {
 	attrs        map[string][]byte
 }
 
-func newScan(table []byte, client *client) *Scan {
+func NewScan(table []byte, c HBaseClient) *Scan {
 	return &Scan{
-		client:       client,
+		client:       c.(*client),
 		table:        table,
 		nextStartRow: nil,
 		families:     make([][]byte, 0),
@@ -46,7 +46,6 @@ func newScan(table []byte, client *client) *Scan {
 		closed:       false,
 		attrs:        make(map[string][]byte),
 	}
-
 }
 
 func (s *Scan) Close() {
@@ -90,8 +89,26 @@ func (s *Scan) posOfFamily(family []byte) int {
 	return -1
 }
 
-func (s *Scan) addAttr(name string, val []byte) {
+func (s *Scan) AddAttr(name string, val []byte) {
 	s.attrs[name] = val
+}
+
+func (s *Scan) Closed() bool {
+	return s.closed
+}
+
+func (s *Scan) CreateGetFromScan(row []byte) *Get {
+	g := NewGet(row)
+	for i, family := range s.families {
+		if len(s.qualifiers[i]) > 0 {
+			for _, qual := range s.qualifiers[i] {
+				g.AddColumn(family, qual)
+			}
+		} else {
+			g.AddFamily(family)
+		}
+	}
+	return g
 }
 
 func (s *Scan) getData(nextStart []byte) []*ResultRow {
