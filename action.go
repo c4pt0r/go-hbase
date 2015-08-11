@@ -12,8 +12,11 @@ type action interface {
 
 func (c *client) do(table, row []byte, action action, useCache bool, retries int) chan pb.Message {
 	region := c.locateRegion(table, row, useCache)
+	if region == nil {
+		return nil
+	}
 	conn := c.getRegionConn(region.server)
-	if conn == nil || region == nil {
+	if conn == nil {
 		return nil
 	}
 

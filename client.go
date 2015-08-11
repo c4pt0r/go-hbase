@@ -281,13 +281,13 @@ func (c *client) locateRegion(table, row []byte, useCache bool) *regionInfo {
 	})
 
 	conn.call(call)
-
+	// TODO err handling
 	response := <-call.responseCh
 
 	switch r := response.(type) {
 	case *proto.GetResponse:
 		res := r.GetResult()
-		if r == nil {
+		if res == nil {
 			log.Warnf("Couldn't find the region: [table=%s] [row=%s] [region_row=%s]", table, row, regionRow)
 			return nil
 		}

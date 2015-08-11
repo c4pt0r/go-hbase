@@ -7,9 +7,17 @@ import (
 	. "gopkg.in/check.v1"
 )
 
-type HBaseGetTestSuit struct{}
+type HBaseGetTestSuit struct {
+	cli HBaseClient
+}
 
 var _ = Suite(&HBaseGetTestSuit{})
+
+func (s *HBaseGetTestSuit) SetUpTest(c *C) {
+	var err error
+	s.cli, err = NewClient([]string{"localhost"}, "/hbase")
+	c.Assert(err, Equals, nil)
+}
 
 func (s *HBaseGetTestSuit) TestGet(c *C) {
 	g := NewGet([]byte("row"))
@@ -30,4 +38,16 @@ func (s *HBaseGetTestSuit) TestGet(c *C) {
 			c.Assert(len(col.Qualifier), Equals, 0)
 		}
 	}
+}
+
+func (s *HBaseGetTestSuit) TestWithClient(c *C) {
+	// get item not exists
+	g := NewGet([]byte("nosuchrow"))
+	r, err := s.cli.Get("nosuchtable", g)
+	c.Assert(err.Error(), Equals, "Create region server connection failed")
+	c.Assert(r == nil, Equals, true)
+
+	r, err = s.cli.Get("t1", g)
+	c.Assert(r == nil, Equals, true)
+	c.Assert(err, Equals, nil)
 }
