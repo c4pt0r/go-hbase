@@ -46,6 +46,7 @@ type connection struct {
 	addr         string
 	conn         net.Conn
 	idGen        *idGenerator
+	isMaster     bool
 	ongoingCalls map[int]*call
 }
 
@@ -87,7 +88,7 @@ func readPayloads(r io.Reader) ([][]byte, error) {
 	return nil, errors.New("unexcepted payload")
 }
 
-func newConnection(addr string) (*connection, error) {
+func newConnection(addr string, isMaster bool) (*connection, error) {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		return nil, err
@@ -95,6 +96,7 @@ func newConnection(addr string) (*connection, error) {
 	c := &connection{
 		addr:         addr,
 		conn:         conn,
+		isMaster:     isMaster,
 		idGen:        newIdGenerator(),
 		ongoingCalls: map[int]*call{},
 	}
@@ -169,6 +171,9 @@ func (c *connection) writeHead() error {
 func (c *connection) writeConnectionHeader() error {
 	buf := iohelper.NewPbBuffer()
 	service := pb.String("ClientService")
+	if c.isMaster {
+		service = pb.String("MasterService")
+	}
 
 	err := buf.WritePBMessage(&proto.ConnectionHeader{
 		UserInfo: &proto.UserInformation{

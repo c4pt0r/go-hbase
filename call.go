@@ -41,6 +41,9 @@ func newCall(request pb.Message) *call {
 	case *proto.CoprocessorServiceRequest:
 		responseBuffer = &proto.CoprocessorServiceResponse{}
 		methodName = "ExecService"
+	case *proto.CreateTableRequest:
+		responseBuffer = &proto.CreateTableResponse{}
+		methodName = "CreateTable"
 	}
 
 	return &call{

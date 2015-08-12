@@ -61,6 +61,7 @@ type HBaseClient interface {
 	Get(tbl string, g *Get) (*ResultRow, error)
 	Put(tbl string, p *Put) (bool, error)
 	Delete(tbl string, d *Delete) (bool, error)
+	TableExists(tbl string) bool
 	ServiceCall(table string, call *CoprocessorServiceCall) (*proto.CoprocessorServiceResponse, error)
 }
 
@@ -136,7 +137,7 @@ func (c *client) init() error {
 		return err
 	}
 	log.Debug("connect root region server...", c.rootServerName)
-	conn, err := newConnection(serverNameToAddr(c.rootServerName))
+	conn, err := newConnection(serverNameToAddr(c.rootServerName), false)
 	if err != nil {
 		return err
 	}
@@ -155,7 +156,7 @@ func (c *client) init() error {
 }
 
 // get connection
-func (c *client) getRegionConn(addr string) *connection {
+func (c *client) getConn(addr string, isMaster bool) *connection {
 	c.mu.RLock()
 	if s, ok := c.cachedConns[addr]; ok {
 		defer c.mu.RUnlock()
@@ -165,13 +166,32 @@ func (c *client) getRegionConn(addr string) *connection {
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	conn, err := newConnection(addr)
+	conn, err := newConnection(addr, isMaster)
 	if err != nil {
 		log.Error(err)
 		return nil
 	}
 	c.cachedConns[addr] = conn
 	return conn
+}
+
+func (c *client) getRegionConn(addr string) *connection {
+	return c.getConn(addr, false)
+}
+
+func (c *client) getMasterConn() *connection {
+	return c.getConn(serverNameToAddr(c.masterServerName), true)
+}
+
+func (c *client) adminAction(req pb.Message) chan pb.Message {
+	conn := c.getMasterConn()
+	cl := newCall(req)
+	err := conn.call(cl)
+
+	if err != nil {
+		panic(err)
+	}
+	return cl.responseCh
 }
 
 // http://stackoverflow.com/questions/27602013/correct-way-to-get-region-name-by-using-hbase-api
