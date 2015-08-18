@@ -44,6 +44,12 @@ func newCall(request pb.Message) *call {
 	case *proto.CreateTableRequest:
 		responseBuffer = &proto.CreateTableResponse{}
 		methodName = "CreateTable"
+	case *proto.DisableTableRequest:
+		responseBuffer = &proto.DisableTableResponse{}
+		methodName = "DisableTable"
+	case *proto.DeleteTableRequest:
+		responseBuffer = &proto.DeleteTableResponse{}
+		methodName = "DeleteTable"
 	}
 
 	return &call{

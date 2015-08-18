@@ -1,24 +1,31 @@
 package hbase
 
-import . "gopkg.in/check.v1"
+import (
+	"github.com/ngaut/log"
+	. "gopkg.in/check.v1"
+)
 
 type AdminTestSuit struct{}
 
 var _ = Suite(&AdminTestSuit{})
 
-func (s *AdminTestSuit) TestTblExists(c *C) {
+func (s *AdminTestSuit) SetUpTest(c *C) {
 	cli, _ := NewClient([]string{"localhost"}, "/hbase")
-	b := cli.TableExists("t1")
-	c.Assert(b, Equals, true)
-}
-
-/*
-func (s *AdminTestSuit) TestCreateTbl(c *C) {
-	cli, _ := NewClient([]string{"localhost"}, "/hbase")
-	tblDesc := NewTableDesciptor("", "xxx")
+	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("xxx"))
 	cf := NewColumnFamilyDescriptor("cf")
 	tblDesc.AddColumnDesc(cf)
-
-	cli.CreateTable(tblDesc, nil)
+	cli.CreateTable(tblDesc, [][]byte{[]byte("f"), []byte("e"), []byte("c")})
+	log.Info("create table")
 }
-*/
+
+func (s *AdminTestSuit) TearDownTest(c *C) {
+	cli, _ := NewClient([]string{"localhost"}, "/hbase")
+	cli.DisableTable(NewTableNameWithDefaultNS("xxx"))
+	cli.DropTable(NewTableNameWithDefaultNS("xxx"))
+}
+
+func (s *AdminTestSuit) TestTblExists(c *C) {
+	cli, _ := NewClient([]string{"localhost"}, "/hbase")
+	b := cli.TableExists("xxx")
+	c.Assert(b, Equals, true)
+}

@@ -1,5 +1,7 @@
 package hbase
 
+import "bytes"
+
 type Type byte
 
 const (
@@ -30,3 +32,9 @@ func (s set) add(k string) {
 func (s set) remove(k string) {
 	delete(s, k)
 }
+
+type BytesSlice [][]byte
+
+func (s BytesSlice) Len() int           { return len(s) }
+func (s BytesSlice) Less(i, j int) bool { return bytes.Compare(s[i], s[j]) < 0 }
+func (s BytesSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }

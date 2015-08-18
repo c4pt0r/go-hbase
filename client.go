@@ -23,16 +23,21 @@ const (
 	zkRootRegionPath = "/meta-region-server"
 	zkMasterAddrPath = "/master"
 
-	magicHeadByte            = 0xff
-	magicHeadSize            = 1
-	idLengthSize             = 4
-	md5HexSize               = 32
-	servernameSeparator      = ","
-	rpcTimeout               = 30000
-	pingTimeout              = 30000
-	callTimeout              = 5000
-	defaultMaxActionRetries  = 3
+	magicHeadByte           = 0xff
+	magicHeadSize           = 1
+	idLengthSize            = 4
+	md5HexSize              = 32
+	servernameSeparator     = ","
+	rpcTimeout              = 30000
+	pingTimeout             = 30000
+	callTimeout             = 5000
+	defaultMaxActionRetries = 3
+	// Some operations can take a long time such as disable of big table.
+	// numRetries is for 'normal' stuff... Multiply by this factor when
+	// want to wait a long time.
+	retryLongerMultiplier    = 31
 	socketDefaultRetryWaitMs = 200
+	defaultRetryWaitMs       = 100
 )
 
 var (
@@ -40,6 +45,8 @@ var (
 	metaTableName    []byte = []byte("hbase:meta")
 	metaRegionName   []byte = []byte("hbase:meta,,1")
 )
+
+var retryPauseTime = []int64{1, 2, 3, 5, 10, 20, 40, 100, 100, 100, 100, 200, 200}
 
 type regionInfo struct {
 	server         string
@@ -49,6 +56,8 @@ type regionInfo struct {
 	ts             string
 	tableNamespace string
 	tableName      string
+	offline        bool
+	split          bool
 }
 
 type tableInfo struct {
@@ -62,6 +71,9 @@ type HBaseClient interface {
 	Put(tbl string, p *Put) (bool, error)
 	Delete(tbl string, d *Delete) (bool, error)
 	TableExists(tbl string) bool
+	DropTable(t TableName) error
+	DisableTable(t TableName) error
+	CreateTable(t *TableDescriptor, splits [][]byte) error
 	ServiceCall(table string, call *CoprocessorServiceCall) (*proto.CoprocessorServiceResponse, error)
 }
 
@@ -228,6 +240,8 @@ func (c *client) parseRegion(rr *ResultRow) *regionInfo {
 			name:           bytes.NewBuffer(rr.Row).String(),
 			tableNamespace: string(info.GetTableName().GetNamespace()),
 			tableName:      string(info.GetTableName().GetQualifier()),
+			offline:        info.GetOffline(),
+			split:          info.GetSplit(),
 		}
 	}
 	log.Errorf("Unable to parse region location (no regioninfo column): %#v", rr)

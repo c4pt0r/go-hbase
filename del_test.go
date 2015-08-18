@@ -18,6 +18,10 @@ func (s *HBaseDelTestSuit) SetUpTest(c *C) {
 	var err error
 	s.cli, err = NewClient([]string{"localhost"}, "/hbase")
 	c.Assert(err, Equals, nil)
+	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("t2"))
+	cf := NewColumnFamilyDescriptor("cf")
+	tblDesc.AddColumnDesc(cf)
+	s.cli.CreateTable(tblDesc, nil)
 }
 
 func (s *HBaseDelTestSuit) TestDel(c *C) {
