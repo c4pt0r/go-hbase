@@ -19,7 +19,7 @@ type Get struct {
 
 func NewGet(row []byte) *Get {
 	return &Get{
-		Row:         row,
+		Row:         append([]byte(nil), row...),
 		Families:    newSet(),
 		FamilyQuals: make(map[string]set),
 		Versions:    1,

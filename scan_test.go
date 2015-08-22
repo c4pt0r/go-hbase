@@ -16,7 +16,7 @@ var _ = Suite(&ScanTestSuit{})
 
 func (s *ScanTestSuit) SetUpSuite(c *C) {
 	var err error
-	s.cli, err = NewClient([]string{"localhost"}, "/hbase")
+	s.cli, err = NewClient([]string{"zoo"}, "/hbase")
 	c.Assert(err, Equals, nil)
 	for i := 1; i <= 5; i++ {
 		p := NewPut([]byte(strconv.Itoa(i)))

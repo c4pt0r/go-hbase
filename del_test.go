@@ -16,7 +16,7 @@ var _ = Suite(&HBaseDelTestSuit{})
 
 func (s *HBaseDelTestSuit) SetUpTest(c *C) {
 	var err error
-	s.cli, err = NewClient([]string{"localhost"}, "/hbase")
+	s.cli, err = NewClient([]string{"zoo"}, "/hbase")
 	c.Assert(err, Equals, nil)
 	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("t2"))
 	cf := NewColumnFamilyDescriptor("cf")

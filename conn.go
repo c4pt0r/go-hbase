@@ -1,6 +1,7 @@
 package hbase
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -45,8 +46,10 @@ type connection struct {
 	mu           sync.Mutex
 	addr         string
 	conn         net.Conn
+	bw           *bufio.Writer
 	idGen        *idGenerator
 	isMaster     bool
+	in           chan *iohelper.PbBuffer
 	ongoingCalls map[int]*call
 }
 
@@ -95,7 +98,9 @@ func newConnection(addr string, isMaster bool) (*connection, error) {
 	}
 	c := &connection{
 		addr:         addr,
+		bw:           bufio.NewWriter(conn),
 		conn:         conn,
+		in:           make(chan *iohelper.PbBuffer, 20),
 		isMaster:     isMaster,
 		idGen:        newIdGenerator(),
 		ongoingCalls: map[int]*call{},
@@ -123,6 +128,7 @@ func (c *connection) init() error {
 			return
 		}
 	}()
+	go c.dispatch()
 	return nil
 }
 
@@ -198,6 +204,18 @@ func (c *connection) writeConnectionHeader() error {
 	return nil
 }
 
+func (c *connection) dispatch() {
+	for {
+		select {
+		case buf := <-c.in:
+			c.bw.Write(buf.Bytes())
+			if len(c.in) == 0 {
+				c.bw.Flush()
+			}
+		}
+	}
+}
+
 func (c *connection) call(request *call) error {
 	id := c.idGen.incrAndGet()
 	rh := &proto.RequestHeader{
@@ -226,15 +244,18 @@ func (c *connection) call(request *call) error {
 
 	c.mu.Lock()
 	c.ongoingCalls[id] = request
-	n, err := c.conn.Write(buf.Bytes())
+	//n, err := c.conn.Write(buf.Bytes())
+	c.in <- buf
 	c.mu.Unlock()
 
-	if err != nil {
-		return err
-	}
+	/*
+		if err != nil {
+			return err
+		}
 
-	if n != len(buf.Bytes()) {
-		return fmt.Errorf("Sent bytes not match number bytes [n=%d] [actual_n=%d]", n, len(buf.Bytes()))
-	}
+		if n != len(buf.Bytes()) {
+			return fmt.Errorf("Sent bytes not match number bytes [n=%d] [actual_n=%d]", n, len(buf.Bytes()))
+		}
+	*/
 	return nil
 }

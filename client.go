@@ -233,8 +233,7 @@ func (c *client) parseRegion(rr *ResultRow) *regionInfo {
 			log.Errorf("Unable to parse region location: %#v", err)
 		}
 
-		return &regionInfo{
-			server:         string(rr.Columns["info:server"].Value),
+		ret := &regionInfo{
 			startKey:       info.GetStartKey(),
 			endKey:         info.GetEndKey(),
 			name:           bytes.NewBuffer(rr.Row).String(),
@@ -243,6 +242,10 @@ func (c *client) parseRegion(rr *ResultRow) *regionInfo {
 			offline:        info.GetOffline(),
 			split:          info.GetSplit(),
 		}
+		if v, ok := rr.Columns["info:server"]; ok {
+			ret.server = string(v.Value)
+		}
+		return ret
 	}
 	log.Errorf("Unable to parse region location (no regioninfo column): %#v", rr)
 	return nil

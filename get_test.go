@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/c4pt0r/go-hbase/proto"
+	"github.com/ngaut/log"
 	. "gopkg.in/check.v1"
 )
 
@@ -18,8 +19,19 @@ var _ = Suite(&HBaseGetTestSuit{})
 
 func (s *HBaseGetTestSuit) SetUpTest(c *C) {
 	var err error
-	s.cli, err = NewClient([]string{"localhost"}, "/hbase")
+	s.cli, err = NewClient([]string{"zoo"}, "/hbase")
 	c.Assert(err, Equals, nil)
+
+	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("t1"))
+	cf := NewColumnFamilyDescriptor("cf")
+	tblDesc.AddColumnDesc(cf)
+	s.cli.CreateTable(tblDesc, nil)
+	log.Info("create table")
+}
+
+func (s *HBaseGetTestSuit) TearDownTest(c *C) {
+	s.cli.DisableTable(NewTableNameWithDefaultNS("t1"))
+	s.cli.DropTable(NewTableNameWithDefaultNS("t1"))
 }
 
 func (s *HBaseGetTestSuit) TestGet(c *C) {
