@@ -209,6 +209,7 @@ func (c *client) metaScan(tbl string, fn func(r *regionInfo) (bool, error)) erro
 
 	startRow := []byte(tbl)
 	scan.StartRow = startRow
+	scan.StopRow = incrementByteString(startRow, 1)
 
 	for {
 		r := scan.Next()
