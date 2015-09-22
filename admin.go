@@ -207,11 +207,11 @@ func (c *client) metaScan(tbl string, fn func(r *RegionInfo) (bool, error)) erro
 		defer scan.Close()
 	}
 
-	//startRow := []byte(tbl)
-	//stopRow := incrementByteString([]byte(tbl), len([]byte(tbl))-1)
+	startRow := []byte(tbl)
+	stopRow := incrementByteString([]byte(tbl), len([]byte(tbl))-1)
 
-	//scan.StartRow = startRow
-	//scan.StopRow = stopRow
+	scan.StartRow = startRow
+	scan.StopRow = stopRow
 
 	for {
 		r := scan.Next()

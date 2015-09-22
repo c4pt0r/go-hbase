@@ -36,7 +36,7 @@ func (s *AdminTestSuit) TestTblExists(c *C) {
 func (s *AdminTestSuit) TestCreateTableAsync(c *C) {
 	cli, _ := NewClient([]string{"zoo"}, "/hbase")
 	wg := sync.WaitGroup{}
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -52,7 +52,7 @@ func (s *AdminTestSuit) TestCreateTableAsync(c *C) {
 	}
 	wg.Wait()
 
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 10; i++ {
 		tbl := NewTableNameWithDefaultNS(fmt.Sprintf("f_%d", i))
 		cli.DisableTable(tbl)
 		cli.DropTable(tbl)
