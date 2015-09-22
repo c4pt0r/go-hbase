@@ -48,16 +48,16 @@ var (
 
 var retryPauseTime = []int64{1, 2, 3, 5, 10, 20, 40, 100, 100, 100, 100, 200, 200}
 
-type regionInfo struct {
-	server         string
-	startKey       []byte
-	endKey         []byte
-	name           string
-	ts             string
-	tableNamespace string
-	tableName      string
-	offline        bool
-	split          bool
+type RegionInfo struct {
+	Server string
+	StartKey []byte
+	EndKey []byte
+	Name string
+	Ts string
+	TableNamespace string
+	TableName string
+	Offline bool
+	Split bool
 }
 
 type tableInfo struct {
@@ -75,6 +75,7 @@ type HBaseClient interface {
 	DisableTable(t TableName) error
 	CreateTable(t *TableDescriptor, splits [][]byte) error
 	ServiceCall(table string, call *CoprocessorServiceCall) (*proto.CoprocessorServiceResponse, error)
+	LocateRegion(table, row []byte, useCache bool) *RegionInfo
 }
 
 // hbase client implemetation
@@ -87,7 +88,7 @@ type client struct {
 	zkRoot           string
 	prefetched       map[string]bool
 	cachedConns      map[string]*connection
-	cachedRegionInfo map[string]map[string]*regionInfo
+	cachedRegionInfo map[string]map[string]*RegionInfo
 	maxRetries       int
 	rootServerName   *proto.ServerName
 	masterServerName *proto.ServerName
@@ -102,7 +103,7 @@ func NewClient(zkHosts []string, zkRoot string) (HBaseClient, error) {
 		zkHosts:          zkHosts,
 		zkRoot:           zkRoot,
 		cachedConns:      make(map[string]*connection),
-		cachedRegionInfo: make(map[string]map[string]*regionInfo),
+		cachedRegionInfo: make(map[string]map[string]*RegionInfo),
 		prefetched:       make(map[string]bool),
 		maxRetries:       defaultMaxActionRetries,
 	}
@@ -222,7 +223,7 @@ func (c *client) createRegionName(table, startKey []byte, id string, newFormat b
 	return b
 }
 
-func (c *client) parseRegion(rr *ResultRow) *regionInfo {
+func (c *client) parseRegion(rr *ResultRow) *RegionInfo {
 	if regionInfoCol, ok := rr.Columns["info:regioninfo"]; ok {
 		offset := strings.Index(string(regionInfoCol.Value), "PBUF") + 4
 		regionInfoBytes := regionInfoCol.Value[offset:]
@@ -233,17 +234,17 @@ func (c *client) parseRegion(rr *ResultRow) *regionInfo {
 			log.Errorf("Unable to parse region location: %#v", err)
 		}
 
-		ret := &regionInfo{
-			startKey:       info.GetStartKey(),
-			endKey:         info.GetEndKey(),
-			name:           bytes.NewBuffer(rr.Row).String(),
-			tableNamespace: string(info.GetTableName().GetNamespace()),
-			tableName:      string(info.GetTableName().GetQualifier()),
-			offline:        info.GetOffline(),
-			split:          info.GetSplit(),
+		ret := &RegionInfo{
+			StartKey:       info.GetStartKey(),
+			EndKey:         info.GetEndKey(),
+			Name:           bytes.NewBuffer(rr.Row).String(),
+			TableNamespace: string(info.GetTableName().GetNamespace()),
+			TableName:      string(info.GetTableName().GetQualifier()),
+			Offline:        info.GetOffline(),
+			Split:          info.GetSplit(),
 		}
 		if v, ok := rr.Columns["info:server"]; ok {
-			ret.server = string(v.Value)
+			ret.Server = string(v.Value)
 		}
 		return ret
 	}
@@ -251,25 +252,25 @@ func (c *client) parseRegion(rr *ResultRow) *regionInfo {
 	return nil
 }
 
-func (c *client) getMetaRegion() *regionInfo {
-	return &regionInfo{
-		startKey: []byte{},
-		endKey:   []byte{},
-		name:     string(metaRegionName),
-		server:   serverNameToAddr(c.rootServerName),
+func (c *client) getMetaRegion() *RegionInfo {
+	return &RegionInfo{
+		StartKey: []byte{},
+		EndKey:   []byte{},
+		Name:     string(metaRegionName),
+		Server:   serverNameToAddr(c.rootServerName),
 	}
 }
 
-func (c *client) getCachedLocation(table, row []byte) *regionInfo {
+func (c *client) getCachedLocation(table, row []byte) *RegionInfo {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	tableStr := string(table)
 	if regions, ok := c.cachedRegionInfo[tableStr]; ok {
 		for _, region := range regions {
-			if (len(region.endKey) == 0 ||
-				bytes.Compare(row, region.endKey) < 0) &&
-				(len(region.startKey) == 0 ||
-					bytes.Compare(row, region.startKey) >= 0) {
+			if (len(region.EndKey) == 0 ||
+				bytes.Compare(row, region.EndKey) < 0) &&
+				(len(region.StartKey) == 0 ||
+					bytes.Compare(row, region.StartKey) >= 0) {
 				return region
 			}
 		}
@@ -277,17 +278,17 @@ func (c *client) getCachedLocation(table, row []byte) *regionInfo {
 	return nil
 }
 
-func (c *client) updateRegionCache(table []byte, region *regionInfo) {
+func (c *client) updateRegionCache(table []byte, region *RegionInfo) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	tableStr := string(table)
 	if _, ok := c.cachedRegionInfo[tableStr]; !ok {
-		c.cachedRegionInfo[tableStr] = make(map[string]*regionInfo)
+		c.cachedRegionInfo[tableStr] = make(map[string]*RegionInfo)
 	}
-	c.cachedRegionInfo[tableStr][region.name] = region
+	c.cachedRegionInfo[tableStr][region.Name] = region
 }
 
-func (c *client) locateRegion(table, row []byte, useCache bool) *regionInfo {
+func (c *client) LocateRegion(table, row []byte, useCache bool) *RegionInfo {
 	// if user wants to locate meteregion, just return it
 	if bytes.Equal(table, metaTableName) {
 		return c.getMetaRegion()
@@ -300,7 +301,7 @@ func (c *client) locateRegion(table, row []byte, useCache bool) *regionInfo {
 
 	// cache miss, try to update region info
 	metaRegion := c.getMetaRegion()
-	conn := c.getRegionConn(metaRegion.server)
+	conn := c.getRegionConn(metaRegion.Server)
 	regionRow := c.createRegionName(table, row, "", true)
 
 	call := newCall(&proto.GetRequest{

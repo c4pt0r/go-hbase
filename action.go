@@ -11,18 +11,18 @@ type action interface {
 }
 
 func (c *client) do(table, row []byte, action action, useCache bool, retries int) chan pb.Message {
-	region := c.locateRegion(table, row, useCache)
+	region := c.LocateRegion(table, row, useCache)
 	if region == nil {
 		return nil
 	}
-	conn := c.getRegionConn(region.server)
+	conn := c.getRegionConn(region.Server)
 	if conn == nil {
 		return nil
 	}
 
 	regionSpecifier := &proto.RegionSpecifier{
 		Type:  proto.RegionSpecifier_REGION_NAME.Enum(),
-		Value: []byte(region.name),
+		Value: []byte(region.Name),
 	}
 
 	var cl *call = nil
@@ -72,7 +72,7 @@ func (c *client) do(table, row []byte, action action, useCache bool, retries int
 		if err != nil {
 			log.Warningf("Error return while attempting call [err=%#v]", err)
 			// purge dead server
-			delete(c.cachedConns, region.server)
+			delete(c.cachedConns, region.Server)
 
 			if retries <= c.maxRetries {
 				// retry action

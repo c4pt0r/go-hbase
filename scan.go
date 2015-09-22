@@ -29,7 +29,7 @@ type Scan struct {
 	nextStartRow []byte
 	numCached    int
 	closed       bool
-	location     *regionInfo
+	location     *RegionInfo
 	server       *connection
 	cache        []*ResultRow
 	attrs        map[string][]byte
@@ -121,7 +121,7 @@ func (s *Scan) getData(nextStart []byte) []*ResultRow {
 	req := &proto.ScanRequest{
 		Region: &proto.RegionSpecifier{
 			Type:  proto.RegionSpecifier_REGION_NAME.Enum(),
-			Value: []byte(location.name),
+			Value: []byte(location.Name),
 		},
 		NumberOfRows: pb.Uint32(uint32(s.numCached)),
 		Scan:         &proto.Scan{},
@@ -186,14 +186,14 @@ func (s *Scan) processResponse(response pb.Message) []*ResultRow {
 	lastRegionRows += n
 
 	if (n == s.numCached) ||
-		len(s.location.endKey) == 0 ||
-		(s.StopRow != nil && bytes.Compare(s.location.endKey, s.StopRow) > 0 && n < s.numCached) ||
+		len(s.location.EndKey) == 0 ||
+		(s.StopRow != nil && bytes.Compare(s.location.EndKey, s.StopRow) > 0 && n < s.numCached) ||
 		res.GetMoreResultsInRegion() {
 		nextRegion = false
 	}
 
 	if n < s.numCached {
-		s.nextStartRow = incrementByteString(s.location.endKey, len(s.location.endKey)-1)
+		s.nextStartRow = incrementByteString(s.location.EndKey, len(s.location.EndKey)-1)
 	}
 
 	if nextRegion {
@@ -243,11 +243,11 @@ func (s *Scan) Next() *ResultRow {
 	return ret
 }
 
-func (s *Scan) closeScan(server *connection, location *regionInfo, id uint64) {
+func (s *Scan) closeScan(server *connection, location *RegionInfo, id uint64) {
 	req := &proto.ScanRequest{
 		Region: &proto.RegionSpecifier{
 			Type:  proto.RegionSpecifier_REGION_NAME.Enum(),
-			Value: []byte(location.name),
+			Value: []byte(location.Name),
 		},
 		ScannerId:    pb.Uint64(id),
 		CloseScanner: pb.Bool(true),
@@ -257,14 +257,14 @@ func (s *Scan) closeScan(server *connection, location *regionInfo, id uint64) {
 	<-cl.responseCh
 }
 
-func (s *Scan) getServerAndLocation(table, startRow []byte) (server *connection, location *regionInfo) {
+func (s *Scan) getServerAndLocation(table, startRow []byte) (server *connection, location *RegionInfo) {
 	if s.server != nil && s.location != nil {
 		server = s.server
 		location = s.location
 		return
 	}
-	location = s.client.locateRegion(table, startRow, true)
-	server = s.client.getRegionConn(location.server)
+	location = s.client.LocateRegion(table, startRow, true)
+	server = s.client.getRegionConn(location.Server)
 
 	s.server = server
 	s.location = location

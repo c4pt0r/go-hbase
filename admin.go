@@ -138,8 +138,8 @@ func (c *client) CreateTable(t *TableDescriptor, splits [][]byte) error {
 			numRegs = len(splits) + 1
 		}
 		regCnt := 0
-		c.metaScan(t.name.name, func(r *regionInfo) (bool, error) {
-			if !(r.offline || r.split) && len(r.server) > 0 && r.tableName == t.name.name {
+		c.metaScan(t.name.name, func(r *RegionInfo) (bool, error) {
+			if !(r.Offline || r.Split) && len(r.Server) > 0 && r.TableName == t.name.name {
 				regCnt++
 			}
 			return true, nil
@@ -201,17 +201,17 @@ func (c *client) DropTable(tblName TableName) error {
 	return nil
 }
 
-func (c *client) metaScan(tbl string, fn func(r *regionInfo) (bool, error)) error {
+func (c *client) metaScan(tbl string, fn func(r *RegionInfo) (bool, error)) error {
 	scan := NewScan(metaTableName, c)
 	if scan != nil {
 		defer scan.Close()
 	}
 
-	startRow := []byte(tbl)
-	stopRow := incrementByteString([]byte(tbl), len([]byte(tbl))-1)
+	//startRow := []byte(tbl)
+	//stopRow := incrementByteString([]byte(tbl), len([]byte(tbl))-1)
 
-	scan.StartRow = startRow
-	scan.StopRow = stopRow
+	//scan.StartRow = startRow
+	//scan.StopRow = stopRow
 
 	for {
 		r := scan.Next()
@@ -228,8 +228,8 @@ func (c *client) metaScan(tbl string, fn func(r *regionInfo) (bool, error)) erro
 
 func (c *client) TableExists(tbl string) bool {
 	found := false
-	c.metaScan(tbl, func(region *regionInfo) (bool, error) {
-		if region != nil && region.tableName == tbl {
+	c.metaScan(tbl, func(region *RegionInfo) (bool, error) {
+		if region != nil && region.TableName == tbl {
 			found = true
 			return false, nil
 		}
