@@ -39,14 +39,17 @@ type Scan struct {
 	TsRangeTo    uint64
 }
 
-func NewScan(table []byte, c HBaseClient) *Scan {
+func NewScan(table []byte, batchSize int, c HBaseClient) *Scan {
+	if batchSize <= 0 {
+		batchSize = 100
+	}
 	return &Scan{
 		client:       c.(*client),
 		table:        table,
 		nextStartRow: nil,
 		families:     make([][]byte, 0),
 		qualifiers:   make([][][]byte, 0),
-		numCached:    1000,
+		numCached:    batchSize,
 		closed:       false,
 		attrs:        make(map[string][]byte),
 	}

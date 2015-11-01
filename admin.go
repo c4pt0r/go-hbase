@@ -202,7 +202,7 @@ func (c *client) DropTable(tblName TableName) error {
 }
 
 func (c *client) metaScan(tbl string, fn func(r *RegionInfo) (bool, error)) error {
-	scan := NewScan(metaTableName, c)
+	scan := NewScan(metaTableName, 0, c)
 	if scan != nil {
 		defer scan.Close()
 	}
