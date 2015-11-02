@@ -14,9 +14,9 @@ import (
 
 	pb "github.com/golang/protobuf/proto"
 
-	"github.com/c4pt0r/go-hbase/proto"
 	"github.com/ngaut/go-zookeeper/zk"
 	"github.com/ngaut/log"
+	"github.com/pingcap/go-hbase/proto"
 )
 
 const (

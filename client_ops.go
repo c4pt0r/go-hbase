@@ -1,7 +1,7 @@
 package hbase
 
 import (
-	"github.com/c4pt0r/go-hbase/proto"
+	"github.com/pingcap/go-hbase/proto"
 	"github.com/juju/errors"
 )
 

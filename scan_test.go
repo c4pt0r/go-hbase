@@ -41,7 +41,7 @@ func (s *ScanTestSuit) TestScan(c *C) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			scan := NewScan([]byte("t2"), s.cli)
+			scan := NewScan([]byte("t2"), 100, s.cli)
 			defer scan.Close()
 			// [1, 5)
 			scan.StartRow = []byte("1")

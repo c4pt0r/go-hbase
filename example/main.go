@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/c4pt0r/go-hbase"
+	"github.com/pingcap/go-hbase"
 	"github.com/ngaut/log"
 )
 

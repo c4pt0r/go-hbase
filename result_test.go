@@ -3,7 +3,7 @@ package hbase
 import (
 	"strconv"
 
-	"github.com/c4pt0r/go-hbase/proto"
+	"github.com/pingcap/go-hbase/proto"
 	pb "github.com/golang/protobuf/proto"
 	. "gopkg.in/check.v1"
 )

@@ -9,8 +9,8 @@ import (
 	"net"
 	"sync"
 
-	"github.com/c4pt0r/go-hbase/iohelper"
-	"github.com/c4pt0r/go-hbase/proto"
+	"github.com/pingcap/go-hbase/iohelper"
+	"github.com/pingcap/go-hbase/proto"
 	pb "github.com/golang/protobuf/proto"
 	"github.com/ngaut/log"
 )

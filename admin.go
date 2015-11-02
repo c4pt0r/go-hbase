@@ -4,9 +4,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/c4pt0r/go-hbase/proto"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/go-hbase/proto"
 )
 
 type TableName struct {

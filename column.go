@@ -5,7 +5,7 @@ import (
 	"io"
 	"log"
 
-	"github.com/c4pt0r/go-hbase/iohelper"
+	"github.com/pingcap/go-hbase/iohelper"
 	"github.com/cznic/exp/lldb"
 )
 

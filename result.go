@@ -1,6 +1,6 @@
 package hbase
 
-import "github.com/c4pt0r/go-hbase/proto"
+import "github.com/pingcap/go-hbase/proto"
 
 type Kv struct {
 	Row   []byte

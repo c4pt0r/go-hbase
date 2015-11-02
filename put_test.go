@@ -3,8 +3,8 @@ package hbase
 import (
 	"bytes"
 
-	"github.com/c4pt0r/go-hbase/proto"
 	"github.com/ngaut/log"
+	"github.com/pingcap/go-hbase/proto"
 	"github.com/pingcap/tidb/util/codec"
 	. "gopkg.in/check.v1"
 )
@@ -46,7 +46,7 @@ func (s *HBasePutTestSuit) TestGetPut(c *C) {
 	cli.Put("t2", p2)
 	cli.Put("t2", p3)
 
-	scan := NewScan([]byte("t2"), cli)
+	scan := NewScan([]byte("t2"), 100, cli)
 	scan.StartRow = []byte("1_")
 	for {
 		r := scan.Next()
