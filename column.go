@@ -21,7 +21,7 @@ func NewColumn(family, qual []byte) *Column {
 }
 
 func encode(parts ...[]byte) ([]byte, error) {
-	buf := bytes.NewBuffer(nil)
+	buf := &bytes.Buffer{}
 	for _, p := range parts {
 		err := iohelper.WriteVarBytes(buf, p)
 		if err != nil {
