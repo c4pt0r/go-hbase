@@ -1,8 +1,8 @@
 package hbase
 
 import (
-	"github.com/pingcap/go-hbase/proto"
 	"github.com/juju/errors"
+	"github.com/pingcap/go-hbase/proto"
 )
 
 func (c *client) Delete(table string, del *Delete) (bool, error) {
@@ -40,6 +40,23 @@ func (c *client) Put(table string, put *Put) (bool, error) {
 		return r.GetProcessed(), nil
 	}
 	return false, errors.Errorf("No valid response seen [response: %#v]", response)
+}
+
+func (c *client) Puts(table string, puts []*Put) (bool, error) {
+	actions := make([]multiaction, len(puts))
+
+	for i, v := range puts {
+		actions[i] = multiaction{
+			row:    v.Row,
+			action: v,
+		}
+	}
+
+	ch := c.multi([]byte(table), actions, true, 0)
+	for _ = range ch {
+		// wait until all regions return
+	}
+	return true, nil
 }
 
 func (c *client) ServiceCall(table string, call *CoprocessorServiceCall) (*proto.CoprocessorServiceResponse, error) {

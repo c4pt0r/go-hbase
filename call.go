@@ -1,8 +1,8 @@
 package hbase
 
 import (
-	"github.com/pingcap/go-hbase/proto"
 	pb "github.com/golang/protobuf/proto"
+	"github.com/pingcap/go-hbase/proto"
 )
 
 type call struct {
@@ -50,6 +50,9 @@ func newCall(request pb.Message) *call {
 	case *proto.DeleteTableRequest:
 		responseBuffer = &proto.DeleteTableResponse{}
 		methodName = "DeleteTable"
+	case *proto.MultiRequest:
+		responseBuffer = &proto.MultiResponse{}
+		methodName = "Multi"
 	}
 
 	return &call{

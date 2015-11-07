@@ -88,8 +88,8 @@ func ReadVarBytes(r ByteMultiReader) ([]byte, error) {
 
 func WriteVarBytes(w io.Writer, b []byte) error {
 	writeVLong(w, int64(len(b)))
-	binary.Write(w, binary.BigEndian, b)
-	return nil
+	_, err := w.Write(b)
+	return err
 }
 
 func ReadInt32(r io.Reader) (int32, error) {
