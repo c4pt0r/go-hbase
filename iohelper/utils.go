@@ -1,9 +1,33 @@
 package iohelper
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 )
+
+var (
+	cachedItob [][]byte
+)
+
+func init() {
+	cachedItob = make([][]byte, 1024)
+	for i := 0; i < len(cachedItob); i++ {
+		var b bytes.Buffer
+		writeVLong(&b, int64(i))
+		cachedItob[i] = b.Bytes()
+	}
+}
+
+func itob(i int) []byte {
+	if i > 0 && i < len(cachedItob) {
+		return cachedItob[i]
+	}
+
+	var b bytes.Buffer
+	binary.Write(&b, binary.BigEndian, i)
+	return b.Bytes()
+}
 
 func decodeVIntSize(value byte) int32 {
 	if int32(value) >= -112 {
@@ -72,7 +96,6 @@ func writeVLong(w io.Writer, i int64) {
 			mask = int64(255) << shiftbits
 			binary.Write(w, binary.BigEndian, byte((i&mask)>>shiftbits))
 		}
-
 	}
 }
 
@@ -87,8 +110,11 @@ func ReadVarBytes(r ByteMultiReader) ([]byte, error) {
 }
 
 func WriteVarBytes(w io.Writer, b []byte) error {
-	writeVLong(w, int64(len(b)))
-	_, err := w.Write(b)
+	_, err := w.Write(itob(len(b)))
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(b)
 	return err
 }
 
