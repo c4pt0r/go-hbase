@@ -2,6 +2,8 @@ package hbase
 
 import (
 	"bytes"
+	"errors"
+	"time"
 
 	pb "github.com/golang/protobuf/proto"
 	"github.com/ngaut/log"
@@ -37,6 +39,7 @@ type Scan struct {
 	MaxVersions  uint32
 	TsRangeFrom  uint64
 	TsRangeTo    uint64
+	err          error
 }
 
 func NewScan(table []byte, batchSize int, c HBaseClient) *Scan {
@@ -57,7 +60,9 @@ func NewScan(table []byte, batchSize int, c HBaseClient) *Scan {
 
 func (s *Scan) Close() {
 	if s.closed == false {
-		s.closeScan(s.server, s.location, s.id)
+		if s.server != nil && s.location != nil {
+			s.closeScan(s.server, s.location, s.id)
+		}
 		s.closed = true
 	}
 }
@@ -102,6 +107,10 @@ func (s *Scan) AddAttr(name string, val []byte) {
 
 func (s *Scan) Closed() bool {
 	return s.closed
+}
+
+func (s *Scan) Error() error {
+	return s.err
 }
 
 func (s *Scan) CreateGetFromScan(row []byte) *Get {
@@ -173,7 +182,18 @@ func (s *Scan) getData(nextStart []byte) []*ResultRow {
 	server.call(cl)
 	select {
 	case msg := <-cl.responseCh:
-		return s.processResponse(msg)
+		rs := s.processResponse(msg)
+		if s.err != nil && isNotInRegionError(s.err) {
+			// clean this table region cache and try again
+			s.client.cleanRegionCache(s.table)
+			s.server = nil
+			s.location = nil
+			s.err = nil
+			time.Sleep(500 * time.Millisecond)
+			log.Error("region outdated, retry", s.server, s.location)
+			return s.getData(nextStart)
+		}
+		return rs
 	}
 }
 
@@ -185,7 +205,7 @@ func (s *Scan) processResponse(response pb.Message) []*ResultRow {
 	case *proto.ScanResponse:
 		res = r
 	default:
-		log.Errorf("Invalid response returned: %T", response)
+		s.err = errors.New(response.(*exception).msg)
 		return nil
 	}
 

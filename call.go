@@ -1,6 +1,8 @@
 package hbase
 
 import (
+	"strings"
+
 	pb "github.com/golang/protobuf/proto"
 	"github.com/pingcap/go-hbase/proto"
 )
@@ -15,6 +17,10 @@ type call struct {
 
 type exception struct {
 	msg string
+}
+
+func isNotInRegionError(err error) bool {
+	return strings.Contains(err.Error(), "org.apache.hadoop.hbase.NotServingRegionException")
 }
 
 func (m *exception) Reset()         { *m = exception{} }

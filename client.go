@@ -290,6 +290,12 @@ func (c *client) updateRegionCache(table []byte, region *RegionInfo) {
 	c.cachedRegionInfo[tableStr][region.Name] = region
 }
 
+func (c *client) cleanRegionCache(table []byte) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.cachedRegionInfo, string(table))
+}
+
 func (c *client) LocateRegion(table, row []byte, useCache bool) *RegionInfo {
 	// if user wants to locate meteregion, just return it
 	if bytes.Equal(table, metaTableName) {

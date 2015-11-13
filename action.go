@@ -167,6 +167,8 @@ func (c *client) do(table, row []byte, action action, useCache bool, retries int
 			if retries <= c.maxRetries {
 				// retry action, and refresh region info
 				log.Infof("Retrying action for the %d time", retries+1)
+				// clean old region info
+				c.cleanRegionCache(table)
 				newr := c.do(table, row, action, false, retries+1)
 				result <- <-newr
 			} else {
