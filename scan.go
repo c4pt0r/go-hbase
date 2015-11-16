@@ -168,6 +168,7 @@ func (s *Scan) getData(nextStart []byte) []*ResultRow {
 		req.Scan.MaxVersions = &s.MaxVersions
 	}
 	if s.TsRangeFrom >= 0 && s.TsRangeTo > 0 && s.TsRangeTo > s.TsRangeFrom {
+		req.Scan.TimeRange = &proto.TimeRange{}
 		req.Scan.TimeRange.From = &s.TsRangeFrom
 		req.Scan.TimeRange.To = &s.TsRangeTo
 	}
