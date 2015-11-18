@@ -38,6 +38,7 @@ const (
 	retryLongerMultiplier    = 31
 	socketDefaultRetryWaitMs = 200
 	defaultRetryWaitMs       = 100
+	nines                    = "99999999999999"
 )
 
 var (
@@ -310,7 +311,7 @@ func (c *client) LocateRegion(table, row []byte, useCache bool) *RegionInfo {
 	// cache miss, try to update region info
 	metaRegion := c.getMetaRegion()
 	conn := c.getRegionConn(metaRegion.Server)
-	regionRow := c.createRegionName(table, row, "", true)
+	regionRow := c.createRegionName(table, row, nines, true)
 
 	call := newCall(&proto.GetRequest{
 		Region: &proto.RegionSpecifier{

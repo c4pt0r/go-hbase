@@ -6,7 +6,6 @@ import (
 	"time"
 
 	pb "github.com/golang/protobuf/proto"
-	"github.com/ngaut/log"
 	"github.com/pingcap/go-hbase/proto"
 )
 
@@ -18,6 +17,19 @@ func incrementByteString(d []byte, i int) []byte {
 		return append(make([]byte, 1), r...)
 	}
 	r[i]++
+	for i > 0 {
+		if r[i] == 0 {
+			i--
+			r[i]++
+		} else {
+			break
+		}
+	}
+	// i == 0
+	if r[i] == 0 {
+		r = append(make([]byte, 1), r...)
+		r[0]++
+	}
 	return r
 }
 
@@ -39,7 +51,10 @@ type Scan struct {
 	MaxVersions  uint32
 	TsRangeFrom  uint64
 	TsRangeTo    uint64
-	err          error
+	lastResult   *ResultRow
+	// if region split, set startRow = lastResult, but must skip the first
+	skipFirst bool
+	err       error
 }
 
 func NewScan(table []byte, batchSize int, c HBaseClient) *Scan {
@@ -158,9 +173,10 @@ func (s *Scan) getData(nextStart []byte) []*ResultRow {
 	if s.id > 0 {
 		req.ScannerId = pb.Uint64(s.id)
 	}
-	if s.StartRow != nil {
-		req.Scan.StartRow = s.StartRow
-	}
+	req.Scan.StartRow = nextStart
+	//if s.StartRow != nil {
+	//req.Scan.StartRow = s.StartRow
+	//}
 	if s.StopRow != nil {
 		req.Scan.StopRow = s.StopRow
 	}
@@ -183,14 +199,20 @@ func (s *Scan) getData(nextStart []byte) []*ResultRow {
 	select {
 	case msg := <-cl.responseCh:
 		rs := s.processResponse(msg)
-		if s.err != nil && isNotInRegionError(s.err) {
+		if s.err != nil && (isNotInRegionError(s.err) || isUnknownScannerError(s.err)) {
 			// clean this table region cache and try again
 			s.client.cleanRegionCache(s.table)
+			if isUnknownScannerError(s.err) {
+				s.id = 0
+			}
+			if s.lastResult != nil {
+				nextStart = s.lastResult.Row
+				s.skipFirst = true
+			}
 			s.server = nil
 			s.location = nil
 			s.err = nil
 			time.Sleep(500 * time.Millisecond)
-			log.Error("region outdated, retry", s.server, s.location)
 			return s.getData(nextStart)
 		}
 		return rs
@@ -214,6 +236,10 @@ func (s *Scan) processResponse(response pb.Message) []*ResultRow {
 	s.id = res.GetScannerId()
 
 	results := res.GetResults()
+	if s.skipFirst {
+		results = results[1:len(results)]
+		s.skipFirst = false
+	}
 	n := len(results)
 
 	lastRegionRows += n
@@ -226,7 +252,7 @@ func (s *Scan) processResponse(response pb.Message) []*ResultRow {
 	}
 
 	if n < s.numCached {
-		s.nextStartRow = incrementByteString(s.location.EndKey, len(s.location.EndKey)-1)
+		s.nextStartRow = s.location.EndKey //incrementByteString(s.location.EndKey, len(s.location.EndKey)-1)
 	}
 
 	if nextRegion {
@@ -244,6 +270,9 @@ func (s *Scan) processResponse(response pb.Message) []*ResultRow {
 	tbr := make([]*ResultRow, n)
 	for i, v := range results {
 		tbr[i] = NewResultRow(v)
+	}
+	if len(tbr) > 0 {
+		s.lastResult = tbr[len(tbr)-1]
 	}
 
 	return tbr
@@ -272,6 +301,7 @@ func (s *Scan) Next() *ResultRow {
 		}
 	}
 	ret = s.cache[0]
+	s.lastResult = ret
 	s.cache = s.cache[1:len(s.cache)]
 	return ret
 }
