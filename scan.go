@@ -271,9 +271,6 @@ func (s *Scan) processResponse(response pb.Message) []*ResultRow {
 	for i, v := range results {
 		tbr[i] = NewResultRow(v)
 	}
-	if len(tbr) > 0 {
-		s.lastResult = tbr[len(tbr)-1]
-	}
 
 	return tbr
 }
