@@ -31,7 +31,7 @@ func (s *ScanTestSuit) SetUpSuite(c *C) {
 	s.cli.DropTable(table)
 
 	tblDesc := NewTableDesciptor(table)
-	cf := NewColumnFamilyDescriptor("cf")
+	cf := newColumnFamilyDescriptor("cf", 3)
 	tblDesc.AddColumnDesc(cf)
 	err = s.cli.CreateTable(tblDesc, nil)
 	c.Assert(err, IsNil)
