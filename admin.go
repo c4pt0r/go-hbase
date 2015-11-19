@@ -2,6 +2,7 @@ package hbase
 
 import (
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/juju/errors"
@@ -64,14 +65,17 @@ func (c *ColumnFamilyDescriptor) AddStrAddr(attrName string, val string) {
 
 // Themis will use VERSIONS=1 for some hook.
 func NewColumnFamilyDescriptor(name string) *ColumnFamilyDescriptor {
-	return newColumnFamilyDescriptor(name, "1")
+	return newColumnFamilyDescriptor(name, 1)
 }
 
-func newColumnFamilyDescriptor(name string, versions string) *ColumnFamilyDescriptor {
+func newColumnFamilyDescriptor(name string, versionsNum int) *ColumnFamilyDescriptor {
+	versions := strconv.Itoa(versionsNum)
+
 	ret := &ColumnFamilyDescriptor{
 		name:  name,
 		attrs: make(map[string][]byte),
 	}
+
 	// add default attrs
 	ret.AddStrAddr("DATA_BLOCK_ENCODING", "NONE")
 	ret.AddStrAddr("BLOOMFILTER", "ROW")
