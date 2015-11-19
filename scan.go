@@ -281,7 +281,11 @@ func (s *Scan) nextBatch() int {
 		startRow = s.StartRow
 	}
 	rs := s.getData(startRow)
-	if rs == nil || len(rs) == 0 {
+	// current region get 0 data, switch next region
+	if rs != nil && len(rs) == 0 && s.nextStartRow != nil {
+		rs = s.getData(s.nextStartRow)
+	}
+	if rs == nil {
 		return 0
 	}
 	s.cache = rs
