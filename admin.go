@@ -62,7 +62,12 @@ func (c *ColumnFamilyDescriptor) AddStrAddr(attrName string, val string) {
 	c.attrs[attrName] = []byte(val)
 }
 
+// Themis will use VERSIONS=1 for some hook.
 func NewColumnFamilyDescriptor(name string) *ColumnFamilyDescriptor {
+	return newColumnFamilyDescriptor(name, "1")
+}
+
+func newColumnFamilyDescriptor(name string, versions string) *ColumnFamilyDescriptor {
 	ret := &ColumnFamilyDescriptor{
 		name:  name,
 		attrs: make(map[string][]byte),
@@ -72,7 +77,7 @@ func NewColumnFamilyDescriptor(name string) *ColumnFamilyDescriptor {
 	ret.AddStrAddr("BLOOMFILTER", "ROW")
 	ret.AddStrAddr("REPLICATION_SCOPE", "0")
 	ret.AddStrAddr("COMPRESSION", "NONE")
-	ret.AddStrAddr("VERSIONS", "3")
+	ret.AddStrAddr("VERSIONS", versions)
 	ret.AddStrAddr("TTL", "2147483647") // 1 << 31
 	ret.AddStrAddr("MIN_VERSIONS", "0")
 	ret.AddStrAddr("KEEP_DELETED_CELLS", "false")
