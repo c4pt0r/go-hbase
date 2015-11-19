@@ -1,6 +1,12 @@
 #go-hbase
 
-Derived from [Lazyshot/go-hbase](https://github.com/Lazyshot/go-hbase).  
-add coprocessor support, thread-safe, admin commands(create/drop table with attrs).
+Derived from [Lazyshot/go-hbase](https://github.com/Lazyshot/go-hbase). Add some new features and fix some bugs.
 
-Support HBase > 0.98.4
+## New Features
+
+1. Coprocessor EndPoint call.
+2. Goroutine-safe.
+3. Admin commands: Create/Disable/Drop table.
+4. Pipelined RPC.
+
+Support HBase >= 0.98.5
