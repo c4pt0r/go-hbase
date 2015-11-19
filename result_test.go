@@ -3,9 +3,9 @@ package hbase
 import (
 	"strconv"
 
-	"github.com/pingcap/go-hbase/proto"
 	pb "github.com/golang/protobuf/proto"
-	. "gopkg.in/check.v1"
+	. "github.com/pingcap/check"
+	"github.com/pingcap/go-hbase/proto"
 )
 
 type ResultTestSuit struct{}

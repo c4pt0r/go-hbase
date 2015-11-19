@@ -1,6 +1,9 @@
 package hbase
 
-import "github.com/pingcap/go-hbase/proto"
+import (
+	"fmt"
+	"github.com/pingcap/go-hbase/proto"
+)
 
 type Kv struct {
 	Row   []byte
@@ -11,10 +14,24 @@ type Kv struct {
 	Column
 }
 
+func (kv *Kv) String() string {
+	if kv == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("Kv(%+v)", *kv)
+}
+
 type ResultRow struct {
 	Row           []byte
 	Columns       map[string]*Kv
 	SortedColumns []*Kv
+}
+
+func (r *ResultRow) String() string {
+	if r == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("ResultRow(%+v)", *r)
 }
 
 func NewResultRow(result *proto.Result) *ResultRow {
