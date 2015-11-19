@@ -17,6 +17,7 @@ func incrementByteString(d []byte, i int) []byte {
 		return append(make([]byte, 1), r...)
 	}
 	r[i]++
+	// carry handle
 	for i > 0 {
 		if r[i] == 0 {
 			i--
@@ -25,7 +26,7 @@ func incrementByteString(d []byte, i int) []byte {
 			break
 		}
 	}
-	// i == 0
+	// i == 0, need add a new byte before array
 	if r[i] == 0 {
 		r = append(make([]byte, 1), r...)
 		r[0]++
@@ -202,9 +203,8 @@ func (s *Scan) getData(nextStart []byte) []*ResultRow {
 		if s.err != nil && (isNotInRegionError(s.err) || isUnknownScannerError(s.err)) {
 			// clean this table region cache and try again
 			s.client.cleanRegionCache(s.table)
-			if isUnknownScannerError(s.err) {
-				s.id = 0
-			}
+			// create new scanner and set startRow to lastResult
+			s.id = 0
 			if s.lastResult != nil {
 				nextStart = s.lastResult.Row
 				s.skipFirst = true
@@ -218,8 +218,6 @@ func (s *Scan) getData(nextStart []byte) []*ResultRow {
 		return rs
 	}
 }
-
-var lastRegionRows int = 0
 
 func (s *Scan) processResponse(response pb.Message) []*ResultRow {
 	var res *proto.ScanResponse
@@ -236,13 +234,7 @@ func (s *Scan) processResponse(response pb.Message) []*ResultRow {
 	s.id = res.GetScannerId()
 
 	results := res.GetResults()
-	if s.skipFirst {
-		results = results[1:len(results)]
-		s.skipFirst = false
-	}
 	n := len(results)
-
-	lastRegionRows += n
 
 	if (n == s.numCached) ||
 		len(s.location.EndKey) == 0 ||
@@ -251,22 +243,23 @@ func (s *Scan) processResponse(response pb.Message) []*ResultRow {
 		nextRegion = false
 	}
 
-	if n < s.numCached {
-		s.nextStartRow = s.location.EndKey //incrementByteString(s.location.EndKey, len(s.location.EndKey)-1)
-	}
-
 	if nextRegion {
+		s.nextStartRow = s.location.EndKey
 		s.closeScan(s.server, s.location, s.id)
 		s.server = nil
 		s.location = nil
 		s.id = 0
-		lastRegionRows = 0
 	}
 
 	if n == 0 && !nextRegion {
 		s.Close()
 	}
 
+	if s.skipFirst {
+		results = results[1:len(results)]
+		s.skipFirst = false
+		n = len(results)
+	}
 	tbr := make([]*ResultRow, n)
 	for i, v := range results {
 		tbr[i] = NewResultRow(v)
