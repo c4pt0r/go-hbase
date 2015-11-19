@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	. "gopkg.in/check.v1"
+	. "github.com/pingcap/check"
 )
 
 // Hook up gocheck into the "go test" runner.

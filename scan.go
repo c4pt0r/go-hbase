@@ -74,12 +74,14 @@ func NewScan(table []byte, batchSize int, c HBaseClient) *Scan {
 }
 
 func (s *Scan) Close() {
-	if s.closed == false {
-		if s.server != nil && s.location != nil {
-			s.closeScan(s.server, s.location, s.id)
-		}
-		s.closed = true
+	if s.closed {
+		return
 	}
+
+	if s.server != nil && s.location != nil {
+		s.closeScan(s.server, s.location, s.id)
+	}
+	s.closed = true
 }
 
 func (s *Scan) AddStringColumn(family, qual string) {
@@ -118,6 +120,11 @@ func (s *Scan) posOfFamily(family []byte) int {
 
 func (s *Scan) AddAttr(name string, val []byte) {
 	s.attrs[name] = val
+}
+
+func (s *Scan) AddTimeRange(from uint64, to uint64) {
+	s.TsRangeFrom = from
+	s.TsRangeTo = to
 }
 
 func (s *Scan) Closed() bool {
@@ -184,8 +191,10 @@ func (s *Scan) getData(nextStart []byte) []*ResultRow {
 		req.Scan.MaxVersions = &s.MaxVersions
 	}
 	if s.TsRangeFrom >= 0 && s.TsRangeTo > 0 && s.TsRangeTo > s.TsRangeFrom {
-		req.Scan.TimeRange.From = &s.TsRangeFrom
-		req.Scan.TimeRange.To = &s.TsRangeTo
+		req.Scan.TimeRange = &proto.TimeRange{
+			From: pb.Uint64(s.TsRangeFrom),
+			To:   pb.Uint64(s.TsRangeTo),
+		}
 	}
 
 	for i, v := range s.families {
@@ -299,7 +308,7 @@ func (s *Scan) Next() *ResultRow {
 	}
 	ret = s.cache[0]
 	s.lastResult = ret
-	s.cache = s.cache[1:len(s.cache)]
+	s.cache = s.cache[1:]
 	return ret
 }
 
