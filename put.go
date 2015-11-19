@@ -1,10 +1,11 @@
 package hbase
 
 import (
-	"github.com/pingcap/go-hbase/proto"
-	pb "github.com/golang/protobuf/proto"
-
 	"bytes"
+	"math"
+
+	pb "github.com/golang/protobuf/proto"
+	"github.com/pingcap/go-hbase/proto"
 )
 
 type Put struct {
@@ -12,6 +13,7 @@ type Put struct {
 	Families   [][]byte
 	Qualifiers [][][]byte
 	Values     [][][]byte
+	Timestamp  uint64
 }
 
 func NewPut(row []byte) *Put {
@@ -46,6 +48,14 @@ func (p *Put) AddStringValue(family, column, value string) {
 	p.AddValue([]byte(family), []byte(column), []byte(value))
 }
 
+func (p *Put) AddTimestamp(ts uint64) {
+	if ts == 0 {
+		p.Timestamp = math.MaxInt64
+	} else {
+		p.Timestamp = ts
+	}
+}
+
 func (p *Put) posOfFamily(family []byte) int {
 	for p, v := range p.Families {
 		if bytes.Equal(family, v) {
@@ -70,6 +80,7 @@ func (p *Put) ToProto() pb.Message {
 			cv.QualifierValue = append(cv.QualifierValue, &proto.MutationProto_ColumnValue_QualifierValue{
 				Qualifier: p.Qualifiers[i][j],
 				Value:     p.Values[i][j],
+				Timestamp: pb.Uint64(p.Timestamp),
 			})
 		}
 

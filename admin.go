@@ -72,7 +72,7 @@ func NewColumnFamilyDescriptor(name string) *ColumnFamilyDescriptor {
 	ret.AddStrAddr("BLOOMFILTER", "ROW")
 	ret.AddStrAddr("REPLICATION_SCOPE", "0")
 	ret.AddStrAddr("COMPRESSION", "NONE")
-	ret.AddStrAddr("VERSIONS", "1")
+	ret.AddStrAddr("VERSIONS", "3")
 	ret.AddStrAddr("TTL", "2147483647") // 1 << 31
 	ret.AddStrAddr("MIN_VERSIONS", "0")
 	ret.AddStrAddr("KEEP_DELETED_CELLS", "false")

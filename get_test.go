@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/pingcap/go-hbase/proto"
 	"github.com/ngaut/log"
-	. "gopkg.in/check.v1"
+	. "github.com/pingcap/check"
+	"github.com/pingcap/go-hbase/proto"
 )
 
 type HBaseGetTestSuit struct {

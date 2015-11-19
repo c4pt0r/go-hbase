@@ -4,9 +4,9 @@ import (
 	"bytes"
 
 	"github.com/ngaut/log"
+	. "github.com/pingcap/check"
 	"github.com/pingcap/go-hbase/proto"
 	"github.com/pingcap/tidb/util/codec"
-	. "gopkg.in/check.v1"
 )
 
 type HBasePutTestSuit struct{}
