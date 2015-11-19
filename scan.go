@@ -182,9 +182,6 @@ func (s *Scan) getData(nextStart []byte) []*ResultRow {
 		req.ScannerId = pb.Uint64(s.id)
 	}
 	req.Scan.StartRow = nextStart
-	//if s.StartRow != nil {
-	//req.Scan.StartRow = s.StartRow
-	//}
 	if s.StopRow != nil {
 		req.Scan.StopRow = s.StopRow
 	}
@@ -265,7 +262,7 @@ func (s *Scan) processResponse(response pb.Message) []*ResultRow {
 	}
 
 	if s.skipFirst {
-		results = results[1:len(results)]
+		results = results[1:]
 		s.skipFirst = false
 		n = len(results)
 	}

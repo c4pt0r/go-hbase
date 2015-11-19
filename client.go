@@ -38,7 +38,8 @@ const (
 	retryLongerMultiplier    = 31
 	socketDefaultRetryWaitMs = 200
 	defaultRetryWaitMs       = 100
-	nines                    = "99999999999999"
+	// always >= any unix timestamp(hbase version)
+	nines = "99999999999999"
 )
 
 var (
