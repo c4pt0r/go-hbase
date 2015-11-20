@@ -3,7 +3,6 @@ package hbase
 import (
 	"bytes"
 	"errors"
-	"time"
 
 	pb "github.com/golang/protobuf/proto"
 	"github.com/ngaut/log"
@@ -227,8 +226,8 @@ func (s *Scan) getData(startKey []byte, retries int) []*ResultRow {
 				s.server = nil
 				s.location = nil
 				s.err = nil
-				log.Warningf("Retryint get data for %d time(s)", retries+1)
-				time.Sleep(time.Duration((retries+1)*500) * time.Millisecond)
+				log.Warnf("Retryint get data for %d time(s)", retries+1)
+				RetrySleep(retries + 1)
 				return s.getData(startKey, retries+1)
 			}
 		}
