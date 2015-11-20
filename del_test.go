@@ -18,10 +18,15 @@ func (s *HBaseDelTestSuit) SetUpTest(c *C) {
 	var err error
 	s.cli, err = NewClient(getTestZkHosts(), "/hbase")
 	c.Assert(err, Equals, nil)
-	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("t2"))
+	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("t1"))
 	cf := NewColumnFamilyDescriptor("cf")
 	tblDesc.AddColumnDesc(cf)
 	s.cli.CreateTable(tblDesc, nil)
+}
+
+func (s *HBaseDelTestSuit) TearDownTest(c *C) {
+	s.cli.DisableTable(NewTableNameWithDefaultNS("t1"))
+	s.cli.DropTable(NewTableNameWithDefaultNS("t1"))
 }
 
 func (s *HBaseDelTestSuit) TestDel(c *C) {
@@ -62,12 +67,12 @@ func (s *HBaseDelTestSuit) TestWithClient(c *C) {
 	// create new
 	p := NewPut([]byte("test"))
 	p.AddValue([]byte("cf"), []byte("q"), []byte("val"))
-	s.cli.Put("t2", p)
+	s.cli.Put("t1", p)
 	// check it
 
 	g := NewGet([]byte("test"))
 	g.AddStringFamily("cf")
-	r, err := s.cli.Get("t2", g)
+	r, err := s.cli.Get("t1", g)
 	c.Assert(err, Equals, nil)
 	c.Assert(string(r.Columns["cf:q"].Value), Equals, "val")
 	log.Info(string(r.Columns["cf:q"].Value))
@@ -75,12 +80,12 @@ func (s *HBaseDelTestSuit) TestWithClient(c *C) {
 
 	d := NewDelete([]byte("test"))
 	d.AddColumn([]byte("cf"), []byte("q"))
-	b, err := s.cli.Delete("t2", d)
+	b, err := s.cli.Delete("t1", d)
 	c.Assert(err, Equals, nil)
 	c.Assert(b, Equals, true)
 
 	// check it
-	r, err = s.cli.Get("t2", g)
+	r, err = s.cli.Get("t1", g)
 	c.Assert(err, Equals, nil)
 	c.Assert(r == nil, Equals, true)
 }

@@ -28,6 +28,19 @@ var _ = Suite(&AdminTestSuit{})
 
 func (s *AdminTestSuit) SetUpTest(c *C) {
 	cli, _ := NewClient(getTestZkHosts(), "/hbase")
+	// clean up last test if do not exit correctly
+	if cli.TableExists("xxx") {
+		s.TearDownTest(c)
+	}
+	for i := 0; i < 10; i++ {
+		tmpTbl := fmt.Sprintf("f_%d", i)
+		if cli.TableExists(tmpTbl) {
+			tbl := NewTableNameWithDefaultNS(tmpTbl)
+			cli.DisableTable(tbl)
+			cli.DropTable(tbl)
+		}
+	}
+
 	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("xxx"))
 	cf := NewColumnFamilyDescriptor("cf")
 	tblDesc.AddColumnDesc(cf)

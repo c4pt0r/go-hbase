@@ -34,6 +34,10 @@ func (c *client) Get(table string, get *Get) (*ResultRow, error) {
 
 func (c *client) Put(table string, put *Put) (bool, error) {
 	ch := c.do([]byte(table), put.GetRow(), put, true, 0)
+	if ch == nil {
+		return false, errors.Errorf("Create region server connection failed")
+	}
+
 	response := <-ch
 	switch r := response.(type) {
 	case *proto.MutateResponse:

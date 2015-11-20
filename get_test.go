@@ -22,6 +22,9 @@ func (s *HBaseGetTestSuit) SetUpTest(c *C) {
 	s.cli, err = NewClient(getTestZkHosts(), "/hbase")
 	c.Assert(err, Equals, nil)
 
+	if s.cli.TableExists("t1") {
+		s.TearDownTest(c)
+	}
 	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("t1"))
 	cf := NewColumnFamilyDescriptor("cf")
 	tblDesc.AddColumnDesc(cf)
@@ -76,7 +79,7 @@ func (s *HBaseGetTestSuit) TestConcurrentGet(c *C) {
 			defer wg.Done()
 			p := NewPut([]byte("test"))
 			p.AddValue([]byte("cf"), []byte("q"), []byte(strconv.Itoa(i)))
-			b, err := s.cli.Put("t2", p)
+			b, err := s.cli.Put("t1", p)
 			c.Assert(b, Equals, true)
 			c.Assert(err, Equals, nil)
 		}(i)
@@ -84,6 +87,6 @@ func (s *HBaseGetTestSuit) TestConcurrentGet(c *C) {
 	wg.Wait()
 
 	g := NewGet([]byte("test"))
-	_, err := s.cli.Get("t2", g)
+	_, err := s.cli.Get("t1", g)
 	c.Assert(err, Equals, nil)
 }
