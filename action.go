@@ -2,6 +2,7 @@ package hbase
 
 import (
 	"sync"
+	"time"
 
 	pb "github.com/golang/protobuf/proto"
 	"github.com/ngaut/log"
@@ -166,9 +167,10 @@ func (c *client) do(table, row []byte, action action, useCache bool, retries int
 		case *exception:
 			if retries <= c.maxRetries {
 				// retry action, and refresh region info
-				log.Infof("Retrying action for the %d time", retries+1)
+				log.Warningf("Retrying action for the %d time(s)", retries+1)
 				// clean old region info
 				c.cleanRegionCache(table)
+				time.Sleep(time.Duration((retries+1)*500) * time.Millisecond)
 				newr := c.do(table, row, action, false, retries+1)
 				result <- <-newr
 			} else {
@@ -191,6 +193,7 @@ func (c *client) do(table, row []byte, action action, useCache bool, retries int
 			if retries <= c.maxRetries {
 				// retry action
 				log.Infof("Retrying action for the %d time", retries+1)
+				time.Sleep(time.Duration((retries+1)*500) * time.Millisecond)
 				c.do(table, row, action, false, retries+1)
 			}
 		}

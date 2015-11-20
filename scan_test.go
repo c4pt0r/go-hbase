@@ -49,8 +49,7 @@ func (s *ScanTestSuit) TearDownSuite(c *C) {
 }
 
 func (s *ScanTestSuit) TestScanInSplit(c *C) {
-	for {
-		break
+	for i := 0; i < 1; i++ {
 		log.Info("begin scan")
 		scan := NewScan([]byte("scan_test"), 100, s.cli)
 		for {
