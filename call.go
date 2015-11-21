@@ -22,6 +22,9 @@ type exception struct {
 func isNotInRegionError(err error) bool {
 	return strings.Contains(err.Error(), "org.apache.hadoop.hbase.NotServingRegionException")
 }
+func isUnknownScannerError(err error) bool {
+	return strings.Contains(err.Error(), "org.apache.hadoop.hbase.UnknownScannerException")
+}
 
 func (m *exception) Reset()         { *m = exception{} }
 func (m *exception) String() string { return m.msg }

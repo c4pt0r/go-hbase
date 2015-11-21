@@ -49,20 +49,18 @@ func (s *ScanTestSuit) TearDownSuite(c *C) {
 }
 
 func (s *ScanTestSuit) TestScanInSplit(c *C) {
+	log.Info("begin scan")
+	scan := NewScan([]byte("scan_test"), 100, s.cli)
 	for {
-		log.Info("begin scan")
-		scan := NewScan([]byte("scan_test"), 100, s.cli)
-		for {
-			r := scan.Next()
-			if r == nil || scan.Closed() {
-				break
-			}
+		r := scan.Next()
+		if r == nil || scan.Closed() {
+			break
 		}
-		if scan.Error() != nil {
-			log.Fatal(scan.Error())
-		}
-		time.Sleep(100 * time.Millisecond)
 	}
+	if scan.Error() != nil {
+		log.Fatal(scan.Error())
+	}
+	time.Sleep(100 * time.Millisecond)
 }
 
 func (s *ScanTestSuit) TestScan(c *C) {
@@ -87,7 +85,7 @@ func (s *ScanTestSuit) TestScan(c *C) {
 				}
 				cnt++
 			}
-			c.Assert(cnt, Equals, 4)
+			c.Assert(cnt, Equals, 4445)
 		}()
 	}
 

@@ -166,9 +166,10 @@ func (c *client) do(table, row []byte, action action, useCache bool, retries int
 		case *exception:
 			if retries <= c.maxRetries {
 				// retry action, and refresh region info
-				log.Infof("Retrying action for the %d time", retries+1)
+				log.Warnf("Retrying action for the %d time(s)", retries+1)
 				// clean old region info
 				c.cleanRegionCache(table)
+				RetrySleep(retries + 1)
 				newr := c.do(table, row, action, false, retries+1)
 				result <- <-newr
 			} else {
@@ -184,13 +185,14 @@ func (c *client) do(table, row []byte, action action, useCache bool, retries int
 		err := conn.call(cl)
 
 		if err != nil {
-			log.Warningf("Error return while attempting call [err=%#v]", err)
+			log.Warnf("Error return while attempting call [err=%#v]", err)
 			// purge dead server
 			delete(c.cachedConns, region.Server)
 
 			if retries <= c.maxRetries {
 				// retry action
 				log.Infof("Retrying action for the %d time", retries+1)
+				RetrySleep(retries + 1)
 				c.do(table, row, action, false, retries+1)
 			}
 		}

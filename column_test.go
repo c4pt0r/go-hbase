@@ -42,5 +42,5 @@ func (s *ColumnTestSuit) TestColumnCoordinate(c *C) {
 	cc2.Table = []byte("tbl")
 	c.Assert(cc.Equal(cc2), Equals, true)
 
-	c.Assert(cc.String(), Equals, "\x18tbl\x18row\x17cf\x16q")
+	c.Assert(cc.String(), Equals, "\x03tbl\x03row\x02cf\x01q")
 }
