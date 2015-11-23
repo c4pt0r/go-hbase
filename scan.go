@@ -3,9 +3,9 @@ package hbase
 import (
 	"bytes"
 	"errors"
-	"time"
 
 	pb "github.com/golang/protobuf/proto"
+	"github.com/ngaut/log"
 	"github.com/pingcap/go-hbase/proto"
 )
 
@@ -34,15 +34,20 @@ func incrementByteString(d []byte, i int) []byte {
 	return r
 }
 
+const (
+	defaultScanMaxRetries = 3
+)
+
 type Scan struct {
-	client       *client
-	id           uint64
-	table        []byte
+	client *client
+	id     uint64
+	table  []byte
+	// row key
 	StartRow     []byte
 	StopRow      []byte
 	families     [][]byte
 	qualifiers   [][][]byte
-	nextStartRow []byte
+	nextStartKey []byte
 	numCached    int
 	closed       bool
 	location     *RegionInfo
@@ -53,9 +58,10 @@ type Scan struct {
 	TsRangeFrom  uint64
 	TsRangeTo    uint64
 	lastResult   *ResultRow
-	// if region split, set startRow = lastResult, but must skip the first
-	skipFirst bool
-	err       error
+	// if region split, set startKey = lastResult.Row, but must skip the first
+	skipFirst  bool
+	err        error
+	maxRetries int
 }
 
 func NewScan(table []byte, batchSize int, c HBaseClient) *Scan {
@@ -65,12 +71,13 @@ func NewScan(table []byte, batchSize int, c HBaseClient) *Scan {
 	return &Scan{
 		client:       c.(*client),
 		table:        table,
-		nextStartRow: nil,
+		nextStartKey: nil,
 		families:     make([][]byte, 0),
 		qualifiers:   make([][][]byte, 0),
 		numCached:    batchSize,
 		closed:       false,
 		attrs:        make(map[string][]byte),
+		maxRetries:   defaultScanMaxRetries,
 	}
 }
 
@@ -150,12 +157,12 @@ func (s *Scan) CreateGetFromScan(row []byte) *Get {
 	return g
 }
 
-func (s *Scan) getData(nextStart []byte) []*ResultRow {
+func (s *Scan) getData(startKey []byte, retries int) []*ResultRow {
 	if s.closed {
 		return nil
 	}
 
-	server, location := s.getServerAndLocation(s.table, nextStart)
+	server, location := s.getServerAndLocation(s.table, startKey)
 
 	req := &proto.ScanRequest{
 		Region: &proto.RegionSpecifier{
@@ -181,7 +188,7 @@ func (s *Scan) getData(nextStart []byte) []*ResultRow {
 	if s.id > 0 {
 		req.ScannerId = pb.Uint64(s.id)
 	}
-	req.Scan.StartRow = nextStart
+	req.Scan.StartRow = startKey
 	if s.StopRow != nil {
 		req.Scan.StopRow = s.StopRow
 	}
@@ -207,19 +214,22 @@ func (s *Scan) getData(nextStart []byte) []*ResultRow {
 	case msg := <-cl.responseCh:
 		rs := s.processResponse(msg)
 		if s.err != nil && (isNotInRegionError(s.err) || isUnknownScannerError(s.err)) {
-			// clean this table region cache and try again
-			s.client.cleanRegionCache(s.table)
-			// create new scanner and set startRow to lastResult
-			s.id = 0
-			if s.lastResult != nil {
-				nextStart = s.lastResult.Row
-				s.skipFirst = true
+			if retries <= s.maxRetries {
+				// clean this table region cache and try again
+				s.client.cleanRegionCache(s.table)
+				// create new scanner and set startRow to lastResult
+				s.id = 0
+				if s.lastResult != nil {
+					startKey = s.lastResult.Row
+					s.skipFirst = true
+				}
+				s.server = nil
+				s.location = nil
+				s.err = nil
+				log.Warnf("Retryint get data for %d time(s)", retries+1)
+				RetrySleep(retries + 1)
+				return s.getData(startKey, retries+1)
 			}
-			s.server = nil
-			s.location = nil
-			s.err = nil
-			time.Sleep(500 * time.Millisecond)
-			return s.getData(nextStart)
 		}
 		return rs
 	}
@@ -236,7 +246,7 @@ func (s *Scan) processResponse(response pb.Message) []*ResultRow {
 	}
 
 	nextRegion := true
-	s.nextStartRow = nil
+	s.nextStartKey = nil
 	s.id = res.GetScannerId()
 
 	results := res.GetResults()
@@ -250,7 +260,7 @@ func (s *Scan) processResponse(response pb.Message) []*ResultRow {
 	}
 
 	if nextRegion {
-		s.nextStartRow = s.location.EndKey
+		s.nextStartKey = s.location.EndKey
 		s.closeScan(s.server, s.location, s.id)
 		s.server = nil
 		s.location = nil
@@ -275,14 +285,14 @@ func (s *Scan) processResponse(response pb.Message) []*ResultRow {
 }
 
 func (s *Scan) nextBatch() int {
-	startRow := s.nextStartRow
-	if startRow == nil {
-		startRow = s.StartRow
+	startKey := s.nextStartKey
+	if startKey == nil {
+		startKey = s.StartRow
 	}
-	rs := s.getData(startRow)
+	rs := s.getData(startKey, 0)
 	// current region get 0 data, switch next region
-	if rs != nil && len(rs) == 0 && s.nextStartRow != nil {
-		rs = s.getData(s.nextStartRow)
+	if rs != nil && len(rs) == 0 && s.nextStartKey != nil {
+		rs = s.getData(s.nextStartKey, 0)
 	}
 	if rs == nil {
 		return 0
