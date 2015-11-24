@@ -79,6 +79,8 @@ type HBaseClient interface {
 	CreateTable(t *TableDescriptor, splits [][]byte) error
 	ServiceCall(table string, call *CoprocessorServiceCall) (*proto.CoprocessorServiceResponse, error)
 	LocateRegion(table, row []byte, useCache bool) *RegionInfo
+	CleanRegionCache(table []byte)
+	CleanAllRegionCache()
 	Close() error
 }
 
@@ -292,10 +294,16 @@ func (c *client) updateRegionCache(table []byte, region *RegionInfo) {
 	c.cachedRegionInfo[tableStr][region.Name] = region
 }
 
-func (c *client) cleanRegionCache(table []byte) {
+func (c *client) CleanRegionCache(table []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.cachedRegionInfo, string(table))
+}
+
+func (c *client) CleanAllRegionCache() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cachedRegionInfo = map[string]map[string]*RegionInfo{}
 }
 
 func (c *client) LocateRegion(table, row []byte, useCache bool) *RegionInfo {

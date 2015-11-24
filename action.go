@@ -168,7 +168,7 @@ func (c *client) do(table, row []byte, action action, useCache bool, retries int
 				// retry action, and refresh region info
 				log.Warnf("Retrying action for the %d time(s)", retries+1)
 				// clean old region info
-				c.cleanRegionCache(table)
+				c.CleanRegionCache(table)
 				RetrySleep(retries + 1)
 				newr := c.do(table, row, action, false, retries+1)
 				result <- <-newr

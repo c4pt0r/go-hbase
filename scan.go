@@ -216,7 +216,7 @@ func (s *Scan) getData(startKey []byte, retries int) []*ResultRow {
 		if s.err != nil && (isNotInRegionError(s.err) || isUnknownScannerError(s.err)) {
 			if retries <= s.maxRetries {
 				// clean this table region cache and try again
-				s.client.cleanRegionCache(s.table)
+				s.client.CleanRegionCache(s.table)
 				// create new scanner and set startRow to lastResult
 				s.id = 0
 				if s.lastResult != nil {
