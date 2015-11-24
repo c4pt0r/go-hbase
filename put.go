@@ -29,7 +29,7 @@ func (p *Put) GetRow() []byte {
 	return p.Row
 }
 
-func (p *Put) AddValue(family, qual, value []byte) {
+func (p *Put) AddValue(family, qual, value []byte) *Put {
 	pos := p.posOfFamily(family)
 
 	if pos == -1 {
@@ -42,18 +42,20 @@ func (p *Put) AddValue(family, qual, value []byte) {
 
 	p.Qualifiers[pos] = append(p.Qualifiers[pos], qual)
 	p.Values[pos] = append(p.Values[pos], value)
+	return p
 }
 
-func (p *Put) AddStringValue(family, column, value string) {
-	p.AddValue([]byte(family), []byte(column), []byte(value))
+func (p *Put) AddStringValue(family, column, value string) *Put {
+	return p.AddValue([]byte(family), []byte(column), []byte(value))
 }
 
-func (p *Put) AddTimestamp(ts uint64) {
+func (p *Put) AddTimestamp(ts uint64) *Put {
 	if ts == 0 {
 		p.Timestamp = math.MaxInt64
 	} else {
 		p.Timestamp = ts
 	}
+	return p
 }
 
 func (p *Put) posOfFamily(family []byte) int {

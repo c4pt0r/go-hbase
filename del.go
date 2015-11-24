@@ -1,8 +1,8 @@
 package hbase
 
 import (
-	"github.com/pingcap/go-hbase/proto"
 	pb "github.com/golang/protobuf/proto"
+	"github.com/pingcap/go-hbase/proto"
 
 	"fmt"
 	"math"
@@ -43,30 +43,33 @@ func (d *Delete) GetRow() []byte {
 	return d.Row
 }
 
-func (d *Delete) AddStringColumn(family, qual string) {
-	d.AddColumn([]byte(family), []byte(qual))
+func (d *Delete) AddStringColumn(family, qual string) *Delete {
+	return d.AddColumn([]byte(family), []byte(qual))
 }
 
-func (d *Delete) AddStringFamily(family string) {
-	d.AddFamily([]byte(family))
+func (d *Delete) AddStringFamily(family string) *Delete {
+	return d.AddFamily([]byte(family))
 }
 
-func (d *Delete) AddColumn(family, qual []byte) {
+func (d *Delete) AddColumn(family, qual []byte) *Delete {
 	d.AddFamily(family)
 	d.FamilyQuals[string(family)].add(string(qual))
+	return d
 }
 
-func (d *Delete) AddFamily(family []byte) {
+func (d *Delete) AddFamily(family []byte) *Delete {
 	d.Families.add(string(family))
 	if _, ok := d.FamilyQuals[string(family)]; !ok {
 		d.FamilyQuals[string(family)] = newSet()
 	}
+	return d
 }
 
-func (d *Delete) AddColumnWithTimestamp(family, qual []byte, ts uint64) {
+func (d *Delete) AddColumnWithTimestamp(family, qual []byte, ts uint64) *Delete {
 	d.AddColumn(family, qual)
 	k := string(family) + ":" + string(qual)
 	d.Ts[k] = ts
+	return d
 }
 
 func (d *Delete) ToProto() pb.Message {

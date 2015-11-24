@@ -1,8 +1,8 @@
 package hbase
 
 import (
-	"github.com/pingcap/go-hbase/proto"
 	pb "github.com/golang/protobuf/proto"
+	"github.com/pingcap/go-hbase/proto"
 
 	"fmt"
 	"strings"
@@ -44,29 +44,32 @@ func (g *Get) AddString(famqual string) error {
 	return nil
 }
 
-func (g *Get) AddStringColumn(family, qual string) {
-	g.AddColumn([]byte(family), []byte(qual))
+func (g *Get) AddStringColumn(family, qual string) *Get {
+	return g.AddColumn([]byte(family), []byte(qual))
 }
 
-func (g *Get) AddStringFamily(family string) {
-	g.AddFamily([]byte(family))
+func (g *Get) AddStringFamily(family string) *Get {
+	return g.AddFamily([]byte(family))
 }
 
-func (g *Get) AddColumn(family, qual []byte) {
+func (g *Get) AddColumn(family, qual []byte) *Get {
 	g.AddFamily(family)
 	g.FamilyQuals[string(family)].add(string(qual))
+	return g
 }
 
-func (g *Get) AddFamily(family []byte) {
+func (g *Get) AddFamily(family []byte) *Get {
 	g.Families.add(string(family))
 	if _, ok := g.FamilyQuals[string(family)]; !ok {
 		g.FamilyQuals[string(family)] = newSet()
 	}
+	return g
 }
 
-func (g *Get) AddTimeRange(from uint64, to uint64) {
+func (g *Get) AddTimeRange(from uint64, to uint64) *Get {
 	g.TsRangeFrom = from
 	g.TsRangeTo = to
+	return g
 }
 
 func (g *Get) ToProto() pb.Message {
