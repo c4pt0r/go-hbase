@@ -6,12 +6,30 @@ import (
 	"github.com/ngaut/log"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/go-hbase/proto"
-	"github.com/pingcap/tidb/util/codec"
 )
 
 type HBasePutTestSuit struct{}
 
 var _ = Suite(&HBasePutTestSuit{})
+
+func (s *HBasePutTestSuit) SetUpTest(c *C) {
+	cli, _ := NewClient(getTestZkHosts(), "/hbase")
+
+	if cli.TableExists("t1") {
+		s.TearDownTest(c)
+	}
+	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("t1"))
+	cf := NewColumnFamilyDescriptor("cf")
+	tblDesc.AddColumnDesc(cf)
+	cli.CreateTable(tblDesc, nil)
+	log.Info("create table")
+}
+
+func (s *HBasePutTestSuit) TearDownTest(c *C) {
+	cli, _ := NewClient(getTestZkHosts(), "/hbase")
+	cli.DisableTable(NewTableNameWithDefaultNS("t1"))
+	cli.DropTable(NewTableNameWithDefaultNS("t1"))
+}
 
 func (s *HBasePutTestSuit) TestPut(c *C) {
 	g := NewPut([]byte("row"))
@@ -30,8 +48,6 @@ func (s *HBasePutTestSuit) TestPut(c *C) {
 }
 
 func (s *HBasePutTestSuit) TestGetPut(c *C) {
-	log.Info(codec.EncodeKey(170))
-
 	p := NewPut([]byte("1_\xff\xff"))
 	p2 := NewPut([]byte("1_\xff\xfe"))
 	p3 := NewPut([]byte("1_\xff\xee"))
@@ -40,24 +56,35 @@ func (s *HBasePutTestSuit) TestGetPut(c *C) {
 	p3.AddValue([]byte("cf"), []byte("q"), []byte("!"))
 
 	cli, err := NewClient(getTestZkHosts(), "/hbase")
-	c.Assert(err, Equals, nil)
+	c.Assert(err, IsNil)
 
-	cli.Put("t2", p)
-	cli.Put("t2", p2)
-	cli.Put("t2", p3)
+	cli.Put("t1", p)
+	cli.Put("t1", p2)
+	cli.Put("t1", p3)
 
-	scan := NewScan([]byte("t2"), 100, cli)
-	scan.StartRow = []byte("1_")
-	for {
-		r := scan.Next()
-		if r == nil {
-			break
-		}
-		log.Info(r.SortedColumns[0].Row)
-	}
+	g := NewGet([]byte("1_\xff\xff"))
+	r, err := cli.Get("t1", g)
+	c.Assert(err, IsNil)
+	c.Assert(string(r.Row), Equals, "1_\xff\xff")
+	c.Assert(string(r.Columns["cf:q"].Family), Equals, "cf")
+	c.Assert(string(r.Columns["cf:q"].Qual), Equals, "q")
+	c.Assert(string(r.Columns["cf:q"].Value), Equals, "!")
+	g2 := NewGet([]byte("1_\xff\xfe"))
+	r2, err := cli.Get("t1", g2)
+	c.Assert(string(r2.Row), Equals, "1_\xff\xfe")
+	g3 := NewGet([]byte("1_\xff\xee"))
+	r3, err := cli.Get("t1", g3)
+	c.Assert(string(r3.Row), Equals, "1_\xff\xee")
 
-	cli.Delete("t2", NewDelete([]byte("1_\xff\xff")))
-	cli.Delete("t2", NewDelete([]byte("1_\xff\xfe")))
-	cli.Delete("t2", NewDelete([]byte("1_\xff\xee")))
+	cli.Delete("t1", NewDelete([]byte("1_\xff\xff")))
+	cli.Delete("t1", NewDelete([]byte("1_\xff\xfe")))
+	cli.Delete("t1", NewDelete([]byte("1_\xff\xee")))
+}
 
+func (s *HBasePutTestSuit) TestPutError(c *C) {
+	cli, err := NewClient(getTestZkHosts(), "/hbase")
+	p := NewPut([]byte("1_\xff\xff"))
+	succ, err := cli.Put("nosuchtable", p)
+	c.Assert(succ, Equals, false)
+	c.Assert(err.Error(), Equals, "Create region server connection failed")
 }

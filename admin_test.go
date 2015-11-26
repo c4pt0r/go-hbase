@@ -29,10 +29,17 @@ var _ = Suite(&AdminTestSuit{})
 
 func (s *AdminTestSuit) SetUpTest(c *C) {
 	cli, _ := NewClient(getTestZkHosts(), "/hbase")
+	// clean up last test if do not exit correctly
 	if cli.TableExists("xxx") {
-		cli.DisableTable(NewTableNameWithDefaultNS("xxx"))
-		cli.DropTable(NewTableNameWithDefaultNS("xxx"))
+		s.TearDownTest(c)
 	}
+	for i := 0; i < 10; i++ {
+		tmpTbl := fmt.Sprintf("f_%d", i)
+		if cli.TableExists(tmpTbl) {
+			s.TearDownTest(c)
+		}
+	}
+
 	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("xxx"))
 	cf := NewColumnFamilyDescriptor("cf")
 	tblDesc.AddColumnDesc(cf)
@@ -41,9 +48,9 @@ func (s *AdminTestSuit) SetUpTest(c *C) {
 }
 
 func (s *AdminTestSuit) TearDownTest(c *C) {
-	//cli, _ := NewClient(getTestZkHosts(), "/hbase")
-	//cli.DisableTable(NewTableNameWithDefaultNS("xxx"))
-	//cli.DropTable(NewTableNameWithDefaultNS("xxx"))
+	cli, _ := NewClient(getTestZkHosts(), "/hbase")
+	cli.DisableTable(NewTableNameWithDefaultNS("xxx"))
+	cli.DropTable(NewTableNameWithDefaultNS("xxx"))
 }
 
 func (s *AdminTestSuit) TestTblExists(c *C) {

@@ -20,8 +20,11 @@ var _ = Suite(&HBaseGetTestSuit{})
 func (s *HBaseGetTestSuit) SetUpTest(c *C) {
 	var err error
 	s.cli, err = NewClient(getTestZkHosts(), "/hbase")
-	c.Assert(err, Equals, nil)
+	c.Assert(err, IsNil)
 
+	if s.cli.TableExists("t1") {
+		s.TearDownTest(c)
+	}
 	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("t1"))
 	cf := NewColumnFamilyDescriptor("cf")
 	tblDesc.AddColumnDesc(cf)
@@ -55,16 +58,16 @@ func (s *HBaseGetTestSuit) TestGet(c *C) {
 	}
 }
 
-func (s *HBaseGetTestSuit) TestWithClient(c *C) {
+func (s *HBaseGetTestSuit) TestNotExist(c *C) {
 	// get item not exists
 	g := NewGet([]byte("nosuchrow"))
 	r, err := s.cli.Get("nosuchtable", g)
 	c.Assert(err.Error(), Equals, "Create region server connection failed")
-	c.Assert(r == nil, Equals, true)
+	c.Assert(r, IsNil)
 
 	r, err = s.cli.Get("t1", g)
-	c.Assert(r == nil, Equals, true)
-	c.Assert(err, Equals, nil)
+	c.Assert(r, IsNil)
+	c.Assert(err, IsNil)
 }
 
 func (s *HBaseGetTestSuit) TestConcurrentGet(c *C) {
@@ -76,14 +79,14 @@ func (s *HBaseGetTestSuit) TestConcurrentGet(c *C) {
 			defer wg.Done()
 			p := NewPut([]byte("test"))
 			p.AddValue([]byte("cf"), []byte("q"), []byte(strconv.Itoa(i)))
-			b, err := s.cli.Put("t2", p)
+			b, err := s.cli.Put("t1", p)
 			c.Assert(b, Equals, true)
-			c.Assert(err, Equals, nil)
+			c.Assert(err, IsNil)
 		}(i)
 	}
 	wg.Wait()
 
 	g := NewGet([]byte("test"))
-	_, err := s.cli.Get("t2", g)
-	c.Assert(err, Equals, nil)
+	_, err := s.cli.Get("t1", g)
+	c.Assert(err, IsNil)
 }
