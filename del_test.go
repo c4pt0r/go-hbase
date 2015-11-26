@@ -3,7 +3,6 @@ package hbase
 import (
 	"bytes"
 
-	"github.com/ngaut/log"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/go-hbase/proto"
 )
@@ -17,7 +16,7 @@ var _ = Suite(&HBaseDelTestSuit{})
 func (s *HBaseDelTestSuit) SetUpTest(c *C) {
 	var err error
 	s.cli, err = NewClient(getTestZkHosts(), "/hbase")
-	c.Assert(err, Equals, nil)
+	c.Assert(err, IsNil)
 	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("t1"))
 	cf := NewColumnFamilyDescriptor("cf")
 	tblDesc.AddColumnDesc(cf)
@@ -68,24 +67,23 @@ func (s *HBaseDelTestSuit) TestWithClient(c *C) {
 	p := NewPut([]byte("test"))
 	p.AddValue([]byte("cf"), []byte("q"), []byte("val"))
 	s.cli.Put("t1", p)
-	// check it
 
+	// check it
 	g := NewGet([]byte("test"))
 	g.AddStringFamily("cf")
 	r, err := s.cli.Get("t1", g)
-	c.Assert(err, Equals, nil)
+	c.Assert(err, IsNil)
 	c.Assert(string(r.Columns["cf:q"].Value), Equals, "val")
-	log.Info(string(r.Columns["cf:q"].Value))
-	// delete it
 
+	// delete it
 	d := NewDelete([]byte("test"))
 	d.AddColumn([]byte("cf"), []byte("q"))
 	b, err := s.cli.Delete("t1", d)
-	c.Assert(err, Equals, nil)
+	c.Assert(err, IsNil)
 	c.Assert(b, Equals, true)
 
 	// check it
 	r, err = s.cli.Get("t1", g)
-	c.Assert(err, Equals, nil)
+	c.Assert(err, IsNil)
 	c.Assert(r == nil, Equals, true)
 }

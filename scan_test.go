@@ -23,7 +23,7 @@ func (s *ScanTestSuit) SetUpSuite(c *C) {
 	)
 
 	s.cli, err = NewClient(getTestZkHosts(), "/hbase")
-	c.Assert(err, Equals, nil)
+	c.Assert(err, IsNil)
 
 	log.Info("create table")
 	table := NewTableNameWithDefaultNS("scan_test")

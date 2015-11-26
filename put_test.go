@@ -59,7 +59,7 @@ func (s *HBasePutTestSuit) TestGetPut(c *C) {
 	p3.AddValue([]byte("cf"), []byte("q"), []byte("!"))
 
 	cli, err := NewClient(getTestZkHosts(), "/hbase")
-	c.Assert(err, Equals, nil)
+	c.Assert(err, IsNil)
 
 	cli.Put("t1", p)
 	cli.Put("t1", p2)
