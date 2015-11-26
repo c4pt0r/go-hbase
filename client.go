@@ -10,10 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/juju/errors"
-
 	pb "github.com/golang/protobuf/proto"
-
+	"github.com/juju/errors"
 	"github.com/ngaut/go-zookeeper/zk"
 	"github.com/ngaut/log"
 	"github.com/pingcap/go-hbase/proto"
@@ -177,20 +175,23 @@ func (c *client) init() error {
 // get connection
 func (c *client) getConn(addr string, isMaster bool) *connection {
 	c.mu.RLock()
-	if s, ok := c.cachedConns[addr]; ok {
-		defer c.mu.RUnlock()
+	s, ok := c.cachedConns[addr]
+	c.mu.Unlock()
+
+	if ok {
 		return s
 	}
-	c.mu.RUnlock()
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	conn, err := newConnection(addr, isMaster)
 	if err != nil {
-		log.Error(err)
+		log.Errorf("create new connection failed - %v", errors.ErrorStack(err))
 		return nil
 	}
+
+	c.mu.RLock()
 	c.cachedConns[addr] = conn
+	c.mu.Unlock()
+
 	return conn
 }
 
@@ -219,12 +220,12 @@ func (c *client) createRegionName(table, startKey []byte, id string, newFormat b
 		startKey = make([]byte, 1)
 	}
 
-	b := bytes.Join([][]byte{table, startKey, []byte(id)}, []byte(","))
+	b := bytes.Join([][]byte{table, startKey, []byte(id)}, []byte{','})
 
 	if newFormat {
 		m := md5.Sum(b)
 		mhex := []byte(hex.EncodeToString(m[:]))
-		b = append(bytes.Join([][]byte{b, mhex}, []byte(".")), []byte(".")...)
+		b = append(bytes.Join([][]byte{b, mhex}, []byte{'.'}), '.')
 	}
 	return b
 }
