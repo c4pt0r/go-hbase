@@ -3,6 +3,7 @@ package hbase
 import (
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/juju/errors"
@@ -245,4 +246,56 @@ func (c *client) TableExists(tbl string) bool {
 		return true, nil
 	})
 	return found
+}
+
+// Split split region
+// tblOrRegion table name or region(<tbl>,<endKey>,<timestamp>.<md5>)
+// splitPoint split point which is a key, leave "" if want to split automatically
+func (c *client) Split(tblOrRegion, splitPoint string) error {
+	// extract table name from supposing regionName
+	tbls := strings.SplitN(tblOrRegion, ",", 2)
+	tbl := tbls[0]
+	found := false
+	var foundRegion *RegionInfo
+	c.metaScan(tbl, func(region *RegionInfo) (bool, error) {
+		if region != nil && region.Name == tblOrRegion {
+			found = true
+			foundRegion = region
+			return false, nil
+		}
+		return true, nil
+	})
+	// this is a region name, split it directly
+	if found {
+		return c.split(foundRegion, []byte(splitPoint))
+	}
+	// this may be a table name
+	tbl = tblOrRegion
+	regions := c.GetRegions([]byte(tbl), false)
+	// split all region
+	for _, region := range regions {
+		err := c.split(region, []byte(splitPoint))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *client) split(region *RegionInfo, splitPoint []byte) error {
+	// not in this region, skip it
+	if len(splitPoint) > 0 && !FindKey(region, splitPoint) {
+		return nil
+	}
+	c.cleanRegionCache([]byte(region.TableName))
+	rs := NewRegionSpecifier(region.Name)
+	req := &proto.SplitRegionRequest{
+		Region: rs,
+	}
+	if len(splitPoint) > 0 {
+		req.SplitPoint = splitPoint
+	}
+	// empty response
+	_ = c.regionAction(region.Server, req)
+	return nil
 }

@@ -79,6 +79,8 @@ type HBaseClient interface {
 	CreateTable(t *TableDescriptor, splits [][]byte) error
 	ServiceCall(table string, call *CoprocessorServiceCall) (*proto.CoprocessorServiceResponse, error)
 	LocateRegion(table, row []byte, useCache bool) *RegionInfo
+	GetRegions(table []byte, useCache bool) []*RegionInfo
+	Split(tblOrRegion, splitPoint string) error
 	Close() error
 }
 
@@ -100,6 +102,9 @@ type client struct {
 
 func serverNameToAddr(server *proto.ServerName) string {
 	return fmt.Sprintf("%s:%d", server.GetHostName(), server.GetPort())
+}
+func addrAndServiceToCache(addr string, srvType ServiceType) string {
+	return fmt.Sprintf("%s|%s", addr, srvType)
 }
 
 func NewClient(zkHosts []string, zkRoot string) (HBaseClient, error) {
@@ -154,12 +159,12 @@ func (c *client) init() error {
 		return err
 	}
 	log.Debug("connect root region server...", c.rootServerName)
-	conn, err := newConnection(serverNameToAddr(c.rootServerName), false)
+	conn, err := newConnection(serverNameToAddr(c.rootServerName), ClientService)
 	if err != nil {
 		return err
 	}
 	// set buffered regionserver conn
-	c.cachedConns[serverNameToAddr(c.rootServerName)] = conn
+	c.cachedConns[addrAndServiceToCache(serverNameToAddr(c.rootServerName), ClientService)] = conn
 
 	res, _, _, err = c.zkClient.GetW(c.zkRoot + zkMasterAddrPath)
 	if err != nil {
@@ -173,9 +178,9 @@ func (c *client) init() error {
 }
 
 // get connection
-func (c *client) getConn(addr string, isMaster bool) *connection {
+func (c *client) getConn(addr string, srvType ServiceType) *connection {
 	c.mu.RLock()
-	if s, ok := c.cachedConns[addr]; ok {
+	if s, ok := c.cachedConns[addrAndServiceToCache(addr, srvType)]; ok {
 		defer c.mu.RUnlock()
 		return s
 	}
@@ -183,25 +188,28 @@ func (c *client) getConn(addr string, isMaster bool) *connection {
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	conn, err := newConnection(addr, isMaster)
+	conn, err := newConnection(addr, srvType)
 	if err != nil {
 		log.Error(err)
 		return nil
 	}
-	c.cachedConns[addr] = conn
+	c.cachedConns[addrAndServiceToCache(addr, srvType)] = conn
 	return conn
 }
 
 func (c *client) getRegionConn(addr string) *connection {
-	return c.getConn(addr, false)
+	return c.getConn(addr, AdminService)
+}
+
+func (c *client) getClientConn(addr string) *connection {
+	return c.getConn(addr, ClientService)
 }
 
 func (c *client) getMasterConn() *connection {
-	return c.getConn(serverNameToAddr(c.masterServerName), true)
+	return c.getConn(serverNameToAddr(c.masterServerName), MasterService)
 }
 
-func (c *client) adminAction(req pb.Message) chan pb.Message {
-	conn := c.getMasterConn()
+func (c *client) doAction(conn *connection, req pb.Message) chan pb.Message {
 	cl := newCall(req)
 	err := conn.call(cl)
 
@@ -209,6 +217,16 @@ func (c *client) adminAction(req pb.Message) chan pb.Message {
 		panic(err)
 	}
 	return cl.responseCh
+}
+
+func (c *client) adminAction(req pb.Message) chan pb.Message {
+	conn := c.getMasterConn()
+	return c.doAction(conn, req)
+}
+
+func (c *client) regionAction(addr string, req pb.Message) chan pb.Message {
+	conn := c.getRegionConn(addr)
+	return c.doAction(conn, req)
 }
 
 // http://stackoverflow.com/questions/27602013/correct-way-to-get-region-name-by-using-hbase-api
@@ -311,7 +329,7 @@ func (c *client) LocateRegion(table, row []byte, useCache bool) *RegionInfo {
 
 	// cache miss, try to update region info
 	metaRegion := c.getMetaRegion()
-	conn := c.getRegionConn(metaRegion.Server)
+	conn := c.getClientConn(metaRegion.Server)
 	regionRow := c.createRegionName(table, row, beyondMaxTimestamp, true)
 
 	call := newCall(&proto.GetRequest{
@@ -346,6 +364,24 @@ func (c *client) LocateRegion(table, row []byte, useCache bool) *RegionInfo {
 		}
 	}
 	return nil
+}
+
+func (c *client) GetRegions(table []byte, useCache bool) []*RegionInfo {
+	var regions []*RegionInfo
+	startKey := []byte("")
+	for {
+		region := c.LocateRegion(table, []byte(startKey), useCache)
+		if region == nil {
+			break
+		}
+		regions = append(regions, region)
+		startKey = region.EndKey
+		// last region
+		if startKey == nil || len(startKey) == 0 {
+			break
+		}
+	}
+	return regions
 }
 
 func (c *client) Close() error {

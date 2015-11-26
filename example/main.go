@@ -69,5 +69,5 @@ func main() {
 	}
 	wg.Wait()
 	elapsed := time.Since(ct)
-	log.Errorf("took %s", elapsed)
+	log.Infof("took %s", elapsed)
 }

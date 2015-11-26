@@ -9,11 +9,32 @@ import (
 	"net"
 	"sync"
 
-	"github.com/pingcap/go-hbase/iohelper"
-	"github.com/pingcap/go-hbase/proto"
 	pb "github.com/golang/protobuf/proto"
 	"github.com/ngaut/log"
+	"github.com/pingcap/go-hbase/iohelper"
+	"github.com/pingcap/go-hbase/proto"
 )
+
+type ServiceType int
+
+const (
+	MasterMonitorService = iota
+	MasterService
+	MasterAdminService
+	AdminService
+	ClientService
+	RegionServerStatusService
+)
+
+// convert above const to protobuf string
+var ServiceString = map[ServiceType]string{
+	MasterMonitorService:      "MasterMonitorService",
+	MasterService:             "MasterService",
+	MasterAdminService:        "MasterAdminService",
+	AdminService:              "AdminService",
+	ClientService:             "ClientService",
+	RegionServerStatusService: "RegionServerStatusService",
+}
 
 type idGenerator struct {
 	n  int
@@ -48,7 +69,7 @@ type connection struct {
 	conn         net.Conn
 	bw           *bufio.Writer
 	idGen        *idGenerator
-	isMaster     bool
+	serviceType  ServiceType
 	in           chan *iohelper.PbBuffer
 	ongoingCalls map[int]*call
 }
@@ -88,20 +109,23 @@ func readPayloads(r io.Reader) ([][]byte, error) {
 			return payloads, err
 		}
 	}
-	return nil, errors.New("unexcepted payload")
+	return nil, errors.New("unexpected payload")
 }
 
-func newConnection(addr string, isMaster bool) (*connection, error) {
+func newConnection(addr string, srvType ServiceType) (*connection, error) {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		return nil, err
+	}
+	if _, ok := ServiceString[srvType]; !ok {
+		return nil, errors.New("unexpected service type")
 	}
 	c := &connection{
 		addr:         addr,
 		bw:           bufio.NewWriter(conn),
 		conn:         conn,
 		in:           make(chan *iohelper.PbBuffer, 20),
-		isMaster:     isMaster,
+		serviceType:  srvType,
 		idGen:        newIdGenerator(),
 		ongoingCalls: map[int]*call{},
 	}
@@ -176,10 +200,7 @@ func (c *connection) writeHead() error {
 
 func (c *connection) writeConnectionHeader() error {
 	buf := iohelper.NewPbBuffer()
-	service := pb.String("ClientService")
-	if c.isMaster {
-		service = pb.String("MasterService")
-	}
+	service := pb.String(ServiceString[c.serviceType])
 
 	err := buf.WritePBMessage(&proto.ConnectionHeader{
 		UserInfo: &proto.UserInformation{

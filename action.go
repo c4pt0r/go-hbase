@@ -108,7 +108,7 @@ func (c *client) multi(table []byte, actions []multiaction, useCache bool, retri
 			close(result)
 		}(actionsByServer, server)
 
-		conn := c.getRegionConn(server)
+		conn := c.getClientConn(server)
 		err := conn.call(cl)
 
 		if err != nil {
@@ -127,7 +127,7 @@ func (c *client) do(table, row []byte, action action, useCache bool, retries int
 	if region == nil {
 		return nil
 	}
-	conn := c.getRegionConn(region.Server)
+	conn := c.getClientConn(region.Server)
 	if conn == nil {
 		return nil
 	}

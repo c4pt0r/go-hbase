@@ -337,7 +337,7 @@ func (s *Scan) getServerAndLocation(table, startRow []byte) (server *connection,
 		return
 	}
 	location = s.client.LocateRegion(table, startRow, true)
-	server = s.client.getRegionConn(location.Server)
+	server = s.client.getConn(location.Server, ClientService)
 
 	s.server = server
 	s.location = location
