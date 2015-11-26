@@ -72,6 +72,11 @@ func (g *Get) AddTimeRange(from uint64, to uint64) *Get {
 	return g
 }
 
+func (g *Get) SetMaxVersion(maxVersion int32) *Get {
+	g.Versions = maxVersion
+	return g
+}
+
 func (g *Get) ToProto() pb.Message {
 	get := &proto.Get{
 		Row: g.Row,
