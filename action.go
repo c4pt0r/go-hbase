@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	pb "github.com/golang/protobuf/proto"
+	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/go-hbase/proto"
 )
@@ -122,14 +123,18 @@ func (c *client) multi(table []byte, actions []multiaction, useCache bool, retri
 	return merge(chs...)
 }
 
-func (c *client) do(table, row []byte, action action, useCache bool, retries int) chan pb.Message {
-	region := c.LocateRegion(table, row, useCache)
-	if region == nil {
-		return nil
+func (c *client) do(table, row []byte, action action, useCache bool, retries int) (chan pb.Message, error) {
+	region, err := c.LocateRegion(table, row, useCache)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
+	if region == nil {
+		return nil, nil
+	}
+
 	conn := c.getRegionConn(region.Server)
 	if conn == nil {
-		return nil
+		return nil, nil
 	}
 
 	regionSpecifier := &proto.RegionSpecifier{
@@ -183,7 +188,6 @@ func (c *client) do(table, row []byte, action action, useCache bool, retries int
 
 	if cl != nil {
 		err := conn.call(cl)
-
 		if err != nil {
 			log.Warnf("Error return while attempting call [err=%#v]", err)
 			// purge dead server

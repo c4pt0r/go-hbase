@@ -34,6 +34,7 @@ func (c *client) Get(table string, get *Get) (*ResultRow, error) {
 
 func (c *client) Put(table string, put *Put) (bool, error) {
 	ch := c.do([]byte(table), put.GetRow(), put, true, 0)
+
 	response := <-ch
 	switch r := response.(type) {
 	case *proto.MutateResponse:
@@ -61,6 +62,7 @@ func (c *client) Puts(table string, puts []*Put) (bool, error) {
 
 func (c *client) ServiceCall(table string, call *CoprocessorServiceCall) (*proto.CoprocessorServiceResponse, error) {
 	ch := c.do([]byte(table), call.Row, call, true, 0)
+
 	response := <-ch
 	switch r := response.(type) {
 	case *proto.CoprocessorServiceResponse:

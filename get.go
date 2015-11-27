@@ -1,11 +1,11 @@
 package hbase
 
 import (
-	pb "github.com/golang/protobuf/proto"
-	"github.com/pingcap/go-hbase/proto"
-
 	"fmt"
 	"strings"
+
+	pb "github.com/golang/protobuf/proto"
+	"github.com/pingcap/go-hbase/proto"
 )
 
 type Get struct {

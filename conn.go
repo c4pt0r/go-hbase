@@ -3,16 +3,16 @@ package hbase
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"net"
 	"sync"
 
-	"github.com/pingcap/go-hbase/iohelper"
-	"github.com/pingcap/go-hbase/proto"
 	pb "github.com/golang/protobuf/proto"
 	"github.com/ngaut/log"
+	"github.com/juju/errors"
+	"github.com/pingcap/go-hbase/iohelper"
+	"github.com/pingcap/go-hbase/proto"
 )
 
 type idGenerator struct {
@@ -72,20 +72,19 @@ func processMessage(msg []byte) [][]byte {
 func readPayloads(r io.Reader) ([][]byte, error) {
 	nBytesExpecting, err := iohelper.ReadInt32(r)
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	if nBytesExpecting > 0 {
 		buf, err := iohelper.ReadN(r, nBytesExpecting)
-
 		if err != nil && err == io.EOF {
-			return nil, err
+			return nil, errors.Trace(err)
 		}
 
 		payloads := processMessage(buf)
 
 		if len(payloads) > 0 {
-			return payloads, err
+			return payloads, errors.Trace(err)
 		}
 	}
 	return nil, errors.New("unexcepted payload")
@@ -107,7 +106,7 @@ func newConnection(addr string, isMaster bool) (*connection, error) {
 	}
 	err = c.init()
 	if err != nil {
-		return nil, err
+		return nil, errors.
 	}
 	return c, nil
 }
