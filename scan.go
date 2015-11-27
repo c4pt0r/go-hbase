@@ -2,9 +2,9 @@ package hbase
 
 import (
 	"bytes"
-	"errors"
 
 	pb "github.com/golang/protobuf/proto"
+	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/go-hbase/proto"
 )
@@ -157,12 +157,15 @@ func (s *Scan) CreateGetFromScan(row []byte) *Get {
 	return g
 }
 
-func (s *Scan) getData(startKey []byte, retries int) []*ResultRow {
+func (s *Scan) getData(startKey []byte, retries int) ([]*ResultRow, error) {
 	if s.closed {
-		return nil
+		return nil, nil
 	}
 
-	server, location := s.getServerAndLocation(s.table, startKey)
+	server, location, err := s.getServerAndLocation(s.table, startKey)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 
 	req := &proto.ScanRequest{
 		Region: &proto.RegionSpecifier{
@@ -231,7 +234,7 @@ func (s *Scan) getData(startKey []byte, retries int) []*ResultRow {
 				return s.getData(startKey, retries+1)
 			}
 		}
-		return rs
+		return rs, nil
 	}
 }
 
@@ -289,10 +292,12 @@ func (s *Scan) nextBatch() int {
 	if startKey == nil {
 		startKey = s.StartRow
 	}
-	rs := s.getData(startKey, 0)
+
+	// Notice: ignore error here.
+	rs, _ := s.getData(startKey, 0)
 	// current region get 0 data, switch next region
 	if rs != nil && len(rs) == 0 && s.nextStartKey != nil {
-		rs = s.getData(s.nextStartKey, 0)
+		rs, _ = s.getData(s.nextStartKey, 0)
 	}
 	if rs == nil {
 		return 0
@@ -330,16 +335,21 @@ func (s *Scan) closeScan(server *connection, location *RegionInfo, id uint64) {
 	<-cl.responseCh
 }
 
-func (s *Scan) getServerAndLocation(table, startRow []byte) (server *connection, location *RegionInfo) {
-	if s.server != nil && s.location != nil {
-		server = s.server
-		location = s.location
-		return
+func (s *Scan) getServerAndLocation(table, startRow []byte) (*connection, *RegionInfo, error) {
+	var err error
+	if s.location == nil {
+		s.location, err = s.client.LocateRegion(table, startRow, true)
+		if err != nil {
+			return nil, nil, errors.Trace(err)
+		}
 	}
-	location = s.client.LocateRegion(table, startRow, true)
-	server = s.client.getRegionConn(location.Server)
 
-	s.server = server
-	s.location = location
-	return
+	if s.server == nil {
+		s.server, err = s.client.getRegionConn(s.location.Server)
+		if err != nil {
+			return nil, nil, errors.Trace(err)
+		}
+	}
+
+	return s.server, s.location, nil
 }

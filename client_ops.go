@@ -6,7 +6,10 @@ import (
 )
 
 func (c *client) Delete(table string, del *Delete) (bool, error) {
-	ch := c.do([]byte(table), del.GetRow(), del, true, 0)
+	ch, err := c.do([]byte(table), del.GetRow(), del, true, 0)
+	if err != nil {
+		return false, errors.Trace(err)
+	}
 
 	response := <-ch
 	switch r := response.(type) {
@@ -17,9 +20,9 @@ func (c *client) Delete(table string, del *Delete) (bool, error) {
 }
 
 func (c *client) Get(table string, get *Get) (*ResultRow, error) {
-	ch := c.do([]byte(table), get.GetRow(), get, true, 0)
-	if ch == nil {
-		return nil, errors.Errorf("Create region server connection failed")
+	ch, err := c.do([]byte(table), get.GetRow(), get, true, 0)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
 
 	response := <-ch
@@ -33,7 +36,10 @@ func (c *client) Get(table string, get *Get) (*ResultRow, error) {
 }
 
 func (c *client) Put(table string, put *Put) (bool, error) {
-	ch := c.do([]byte(table), put.GetRow(), put, true, 0)
+	ch, err := c.do([]byte(table), put.GetRow(), put, true, 0)
+	if err != nil {
+		return false, errors.Trace(err)
+	}
 
 	response := <-ch
 	switch r := response.(type) {
@@ -43,25 +49,11 @@ func (c *client) Put(table string, put *Put) (bool, error) {
 	return false, errors.Errorf("No valid response seen [response: %#v]", response)
 }
 
-func (c *client) Puts(table string, puts []*Put) (bool, error) {
-	actions := make([]multiaction, len(puts))
-
-	for i, v := range puts {
-		actions[i] = multiaction{
-			row:    v.Row,
-			action: v,
-		}
-	}
-
-	ch := c.multi([]byte(table), actions, true, 0)
-	for _ = range ch {
-		// wait until all regions return
-	}
-	return true, nil
-}
-
 func (c *client) ServiceCall(table string, call *CoprocessorServiceCall) (*proto.CoprocessorServiceResponse, error) {
-	ch := c.do([]byte(table), call.Row, call, true, 0)
+	ch, err := c.do([]byte(table), call.Row, call, true, 0)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 
 	response := <-ch
 	switch r := response.(type) {

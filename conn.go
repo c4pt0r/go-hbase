@@ -9,8 +9,8 @@ import (
 	"sync"
 
 	pb "github.com/golang/protobuf/proto"
-	"github.com/ngaut/log"
 	"github.com/juju/errors"
+	"github.com/ngaut/log"
 	"github.com/pingcap/go-hbase/iohelper"
 	"github.com/pingcap/go-hbase/proto"
 )
@@ -53,20 +53,22 @@ type connection struct {
 	ongoingCalls map[int]*call
 }
 
-func processMessage(msg []byte) [][]byte {
+func processMessage(msg []byte) ([][]byte, error) {
 	buf := pb.NewBuffer(msg)
 	payloads := make([][]byte, 0)
 
+	// Question: why can we ignore this error?
 	for {
 		hbytes, err := buf.DecodeRawBytes(true)
 		if err != nil {
-			break
+			log.Warnf("Decode raw bytes error - %v", errors.ErrorStack(err))
+			return nil, errors.Trace(err)
 		}
 
 		payloads = append(payloads, hbytes)
 	}
 
-	return payloads
+	return payloads, nil
 }
 
 func readPayloads(r io.Reader) ([][]byte, error) {
@@ -77,24 +79,30 @@ func readPayloads(r io.Reader) ([][]byte, error) {
 
 	if nBytesExpecting > 0 {
 		buf, err := iohelper.ReadN(r, nBytesExpecting)
-		if err != nil && err == io.EOF {
+		// Question: why should we return error only when we get an io.EOF error?
+		if err != nil && ErrorEqual(err, io.EOF) {
 			return nil, errors.Trace(err)
 		}
 
-		payloads := processMessage(buf)
+		payloads, err := processMessage(buf)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
 
 		if len(payloads) > 0 {
 			return payloads, errors.Trace(err)
 		}
 	}
+
 	return nil, errors.New("unexcepted payload")
 }
 
 func newConnection(addr string, isMaster bool) (*connection, error) {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
+
 	c := &connection{
 		addr:         addr,
 		bw:           bufio.NewWriter(conn),
@@ -104,26 +112,30 @@ func newConnection(addr string, isMaster bool) (*connection, error) {
 		idGen:        newIdGenerator(),
 		ongoingCalls: map[int]*call{},
 	}
+
 	err = c.init()
 	if err != nil {
-		return nil, errors.
+		return nil, errors.Trace(err)
 	}
+
 	return c, nil
 }
 
 func (c *connection) init() error {
 	err := c.writeHead()
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
+
 	err = c.writeConnectionHeader()
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
+
 	go func() {
 		err := c.processMessages()
 		if err != nil {
-			log.Warn(err)
+			log.Warnf("process messages failed - %v", errors.ErrorStack(err))
 			return
 		}
 	}()
@@ -135,13 +147,13 @@ func (c *connection) processMessages() error {
 	for {
 		msgs, err := readPayloads(c.conn)
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 
 		var rh proto.ResponseHeader
 		err = pb.Unmarshal(msgs[0], &rh)
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 
 		callId := rh.GetCallId()
@@ -228,34 +240,25 @@ func (c *connection) call(request *call) error {
 	bfrh := iohelper.NewPbBuffer()
 	err := bfrh.WritePBMessage(rh)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	bfr := iohelper.NewPbBuffer()
 	err = bfr.WritePBMessage(request.request)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
+	// Buf =>
+	// | total size | pb1 size| pb1 | pb2 size | pb2 | ...
 	buf := iohelper.NewPbBuffer()
-	//Buf=> | total size | pb1 size| pb1 size | pb2 size | pb2 | ...
 	buf.WriteDelimitedBuffers(bfrh, bfr)
 
 	c.mu.Lock()
 	c.ongoingCalls[id] = request
-	//n, err := c.conn.Write(buf.Bytes())
 	c.in <- buf
 	c.mu.Unlock()
 
-	/*
-		if err != nil {
-			return err
-		}
-
-		if n != len(buf.Bytes()) {
-			return fmt.Errorf("Sent bytes not match number bytes [n=%d] [actual_n=%d]", n, len(buf.Bytes()))
-		}
-	*/
 	return nil
 }
 

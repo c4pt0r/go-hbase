@@ -134,12 +134,17 @@ func (c *client) CreateTable(t *TableDescriptor, splits [][]byte) error {
 	req.TableSchema = schema
 	req.SplitKeys = splits
 
-	ch := c.adminAction(req)
+	ch, err := c.adminAction(req)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	resp := <-ch
 	switch r := resp.(type) {
 	case *exception:
 		return errors.New(r.msg)
 	}
+
 	// wait and check
 	for retry := 0; retry < defaultMaxActionRetries*retryLongerMultiplier; retry++ {
 		numRegs := 1
@@ -169,12 +174,18 @@ func (c *client) DisableTable(tblName TableName) error {
 			Namespace: []byte(tblName.namespace),
 		},
 	}
-	ch := c.adminAction(req)
+
+	ch, err := c.adminAction(req)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	resp := <-ch
 	switch r := resp.(type) {
 	case *exception:
 		return errors.New(r.msg)
 	}
+
 	return nil
 }
 
@@ -185,7 +196,12 @@ func (c *client) EnableTable(tblName TableName) error {
 			Namespace: []byte(tblName.namespace),
 		},
 	}
-	ch := c.adminAction(req)
+
+	ch, err := c.adminAction(req)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	resp := <-ch
 	switch r := resp.(type) {
 	case *exception:
@@ -201,7 +217,12 @@ func (c *client) DropTable(tblName TableName) error {
 			Namespace: []byte(tblName.namespace),
 		},
 	}
-	ch := c.adminAction(req)
+
+	ch, err := c.adminAction(req)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	resp := <-ch
 	switch r := resp.(type) {
 	case *exception:
@@ -227,7 +248,12 @@ func (c *client) metaScan(tbl string, fn func(r *RegionInfo) (bool, error)) erro
 		if r == nil || scan.Closed() {
 			break
 		}
-		region := c.parseRegion(r)
+
+		region, err := c.parseRegion(r)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
 		if more, err := fn(region); !more || err != nil {
 			return err
 		}
