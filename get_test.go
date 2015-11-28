@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/ngaut/log"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/go-hbase/proto"
 )
@@ -30,7 +29,7 @@ func (s *HBaseGetTestSuit) SetUpTest(c *C) {
 }
 
 func (s *HBaseGetTestSuit) TearDownTest(c *C) {
-	err = s.cli.DisableTable(NewTableNameWithDefaultNS("t1"))
+	err := s.cli.DisableTable(NewTableNameWithDefaultNS("t1"))
 	c.Assert(err, IsNil)
 
 	err = s.cli.DropTable(NewTableNameWithDefaultNS("t1"))
