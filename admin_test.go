@@ -44,7 +44,7 @@ func (s *AdminTestSuit) TearDownTest(c *C) {
 func (s *AdminTestSuit) TestTblExists(c *C) {
 	cli, _ := NewClient(getTestZkHosts(), "/hbase")
 	b := cli.TableExists("xxx")
-	c.Assert(b, Equals, true)
+	c.Assert(b, IsTrue)
 }
 
 func (s *AdminTestSuit) TestCreateTableAsync(c *C) {

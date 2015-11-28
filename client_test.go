@@ -28,9 +28,9 @@ func (s *ClientTestSuit) TestCreateRegionName(c *C) {
 
 	startKey = ""
 	name = mockClient.createRegionName([]byte(table), []byte(startKey), id, newFormat)
-	c.Assert(string(name), Equals, `t,\x00,1234`)
+	c.Assert(string(name), Equals, "t,\x00,1234")
 
 	newFormat = true
 	name = mockClient.createRegionName([]byte(table), []byte(startKey), id, newFormat)
-	c.Assert(string(name), Equals, `t,\x00,1234.0b33d053d09ba72744f058890ed449b2.`)
+	c.Assert(string(name), Equals, "t,\x00,1234.0b33d053d09ba72744f058890ed449b2.")
 }

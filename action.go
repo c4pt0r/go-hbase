@@ -13,7 +13,7 @@ type action interface {
 	ToProto() pb.Message
 }
 
-func (c *client) do(table, row []byte, action action, useCache bool, retries int) (chan pb.Message, error) {
+func (c *client) innerCall(table, row []byte, useCache bool, action action) (*call, error) {
 	region, err := c.LocateRegion(table, row, useCache)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -51,49 +51,52 @@ func (c *client) do(table, row []byte, action action, useCache bool, retries int
 		return nil, errors.Errorf("Unknown action - %v - %v", reflect.TypeOf(action), action)
 	}
 
-	result := make(chan pb.Message)
-	go func() {
-		r := <-cl.responseCh
-
-		switch r.(type) {
-		case *exception:
-			if retries <= c.maxRetries {
-				// retry action, and refresh region info
-				log.Warnf("Retrying action for the %d time(s), error - %v", retries+1, r)
-				// clean old region info
-				c.CleanRegionCache(table)
-				RetrySleep(retries + 1)
-				newr, err := c.do(table, row, action, false, retries+1)
-				if err == nil {
-					result <- <-newr
-					return
-				}
-
-				log.Warnf("Retrying action for the %d time(s), error - %v", retries+1, errors.ErrorStack(err))
-			}
-
-			result <- r
-			return
-		default:
-			result <- r
-		}
-	}()
-
 	err = conn.call(cl)
 	if err != nil {
-		log.Warnf("Error return while attempting call [err=%#v]", err)
-
-		// remove bad server cache.
 		delete(c.cachedConns, region.Server)
-
-		// retry action, do not use cache
-		// Question: why use retry here?
-		if retries <= c.maxRetries {
-			log.Warnf("Retrying action for the %d time(s), error - %v", retries+1, errors.ErrorStack(err))
-			RetrySleep(retries + 1)
-			c.do(table, row, action, false, retries+1)
-		}
+		return nil, errors.Trace(err)
 	}
 
-	return result, nil
+	return cl, nil
+}
+
+func (c *client) innerDo(table, row []byte, action action, useCache bool) (pb.Message, error) {
+	// Try to create and send a new resuqest call.
+	cl, err := c.innerCall(table, row, useCache, action)
+	if err != nil {
+		log.Warnf("inner call failed - %v", errors.ErrorStack(err))
+		// remove bad server cache and try again
+		return nil, errors.Trace(err)
+	}
+
+	// Wait and receive the result.
+	return <-cl.responseCh, nil
+}
+
+func (c *client) do(table, row []byte, action action, useCache bool) (pb.Message, error) {
+	var (
+		result pb.Message
+		err    error
+	)
+
+	// TODO: check whether action type is valid.
+LOOP:
+	for i := 0; i < c.maxRetries; i++ {
+		result, err = c.innerDo(table, row, action, useCache)
+		if err == nil {
+			switch r := result.(type) {
+			case *exception:
+				err = errors.New(r.msg)
+				c.CleanRegionCache(table)
+			default:
+				break LOOP
+			}
+		}
+
+		useCache = false
+		log.Warnf("Retrying action for the %d time(s), error - %v", i+1, errors.ErrorStack(err))
+		RetrySleep(i + 1)
+	}
+
+	return result, errors.Trace(err)
 }

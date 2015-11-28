@@ -61,8 +61,8 @@ func processMessage(msg []byte) ([][]byte, error) {
 	for {
 		hbytes, err := buf.DecodeRawBytes(true)
 		if err != nil {
-			log.Warnf("Decode raw bytes error - %v", errors.ErrorStack(err))
-			return nil, errors.Trace(err)
+			log.Debugf("Decode raw bytes error - %v", errors.ErrorStack(err))
+			break
 		}
 
 		payloads = append(payloads, hbytes)

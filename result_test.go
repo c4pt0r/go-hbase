@@ -30,7 +30,7 @@ func (s *ResultTestSuit) TestResultRow(c *C) {
 	}
 
 	rr := NewResultRow(r)
-	c.Assert(len(rr.SortedColumns), Equals, 1)
-	c.Assert(len(rr.SortedColumns[0].Values), Equals, 10)
+	c.Assert(rr.SortedColumns, HasLen, 1)
+	c.Assert(rr.SortedColumns[0].Values, HasLen, 10)
 	c.Assert(string(rr.SortedColumns[0].Value), Equals, "10")
 }
