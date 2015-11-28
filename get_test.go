@@ -78,7 +78,7 @@ func (s *HBaseGetTestSuit) TestConcurrentGet(c *C) {
 			defer wg.Done()
 			p := NewPut([]byte("test"))
 			p.AddValue([]byte("cf"), []byte("q"), []byte(strconv.Itoa(i)))
-			b, err := s.cli.Put("t2", p)
+			b, err := s.cli.Put("t1", p)
 			c.Assert(b, IsTrue)
 			c.Assert(err, IsNil)
 		}(i)
@@ -86,6 +86,6 @@ func (s *HBaseGetTestSuit) TestConcurrentGet(c *C) {
 	wg.Wait()
 
 	g := NewGet([]byte("test"))
-	_, err := s.cli.Get("t2", g)
+	_, err := s.cli.Get("t1", g)
 	c.Assert(err, IsNil)
 }
