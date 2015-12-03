@@ -6,8 +6,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"reflect"
-	"strings"
 	"sync"
 	"time"
 
@@ -71,7 +69,7 @@ type HBaseClient interface {
 	Get(tbl string, g *Get) (*ResultRow, error)
 	Put(tbl string, p *Put) (bool, error)
 	Delete(tbl string, d *Delete) (bool, error)
-	TableExists(tbl string) bool
+	TableExists(tbl string) (bool, error)
 	DropTable(t TableName) error
 	DisableTable(t TableName) error
 	CreateTable(t *TableDescriptor, splits [][]byte) error
@@ -126,12 +124,16 @@ func (c *client) decodeMeta(data []byte) (*proto.ServerName, error) {
 	}
 
 	var n int32
-	binary.Read(bytes.NewBuffer(data[1:]), binary.BigEndian, &n)
+	err := binary.Read(bytes.NewBuffer(data[1:]), binary.BigEndian, &n)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
 	dataOffset := magicHeadSize + idLengthSize + int(n)
 	data = data[(dataOffset + 4):]
 
 	var mrs proto.MetaRegionServer
-	err := pb.Unmarshal(data, &mrs)
+	err = pb.Unmarshal(data, &mrs)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -192,7 +194,7 @@ func (c *client) getConn(addr string, isMaster bool) (*connection, error) {
 	var err error
 	conn, err = newConnection(addr, isMaster)
 	if err != nil {
-		return nil, errors.Errorf("create new connection failed - %v", err)
+		return nil, errors.Errorf("create new connection failed - %v", errors.ErrorStack(err))
 	}
 
 	c.mu.Lock()
@@ -248,7 +250,7 @@ func (c *client) parseRegion(rr *ResultRow) (*RegionInfo, error) {
 		return nil, errors.Errorf("Unable to parse region location (no regioninfo column): %#v", rr)
 	}
 
-	offset := strings.Index(string(regionInfoCol.Value), "PBUF") + 4
+	offset := bytes.Index(regionInfoCol.Value, []byte("PBUF")) + 4
 	regionInfoBytes := regionInfoCol.Value[offset:]
 
 	var info proto.RegionInfo
@@ -286,6 +288,7 @@ func (c *client) getMetaRegion() *RegionInfo {
 func (c *client) getCachedLocation(table, row []byte) *RegionInfo {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
 	tableStr := string(table)
 	if regions, ok := c.cachedRegionInfo[tableStr]; ok {
 		for _, region := range regions {
@@ -297,12 +300,14 @@ func (c *client) getCachedLocation(table, row []byte) *RegionInfo {
 			}
 		}
 	}
+
 	return nil
 }
 
 func (c *client) updateRegionCache(table []byte, region *RegionInfo) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	tableStr := string(table)
 	if _, ok := c.cachedRegionInfo[tableStr]; !ok {
 		c.cachedRegionInfo[tableStr] = make(map[string]*RegionInfo)
@@ -323,19 +328,19 @@ func (c *client) CleanAllRegionCache() {
 }
 
 func (c *client) LocateRegion(table, row []byte, useCache bool) (*RegionInfo, error) {
-	// if user wants to locate metaregion, just return it
+	// If user wants to locate metaregion, just return it.
 	if bytes.Equal(table, metaTableName) {
 		return c.getMetaRegion(), nil
 	}
 
-	// try to get from cache
+	// Try to get location from cache.
 	if useCache {
 		if r := c.getCachedLocation(table, row); r != nil {
 			return r, nil
 		}
 	}
 
-	// cache missed, try to update region info
+	// If cache missed, try to get and update region info.
 	metaRegion := c.getMetaRegion()
 	conn, err := c.getRegionConn(metaRegion.Server)
 	if err != nil {
@@ -369,7 +374,7 @@ func (c *client) LocateRegion(table, row []byte, useCache bool) (*RegionInfo, er
 	case *proto.GetResponse:
 		res := r.GetResult()
 		if res == nil {
-			return nil, errors.Errorf("Empty region: [table=%s] [row=%s] [region_row=%s]", table, row, regionRow)
+			return nil, errors.Errorf("Empty region: [table=%s] [row=%q] [region_row=%q]", table, row, regionRow)
 		}
 
 		rr := NewResultRow(res)
@@ -383,10 +388,10 @@ func (c *client) LocateRegion(table, row []byte, useCache bool) (*RegionInfo, er
 	case *exception:
 		return nil, errors.New(r.msg)
 	default:
-		log.Warnf("[LocateRegion]Unknown response - %v - %v", reflect.TypeOf(r), r)
+		log.Warnf("[LocateRegion]Unknown response - %T - %v", r, r)
 	}
 
-	return nil, errors.Errorf("Couldn't find the region: [table=%s] [row=%s] [region_row=%s]", table, row, regionRow)
+	return nil, errors.Errorf("Couldn't find the region: [table=%s] [row=%q] [region_row=%q]", table, row, regionRow)
 }
 
 func (c *client) Close() error {

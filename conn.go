@@ -3,7 +3,6 @@ package hbase
 import (
 	"bufio"
 	"bytes"
-	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -90,7 +89,7 @@ func readPayloads(r io.Reader) ([][]byte, error) {
 		}
 
 		if len(payloads) > 0 {
-			return payloads, errors.Trace(err)
+			return payloads, nil
 		}
 	}
 
@@ -161,14 +160,14 @@ func (c *connection) processMessages() error {
 		call, ok := c.ongoingCalls[int(callId)]
 		if !ok {
 			c.mu.Unlock()
-			return fmt.Errorf("Invalid call id: %d", callId)
+			return errors.Errorf("Invalid call id: %d", callId)
 		}
 		delete(c.ongoingCalls, int(callId))
 		c.mu.Unlock()
 
 		exception := rh.GetException()
 		if exception != nil {
-			call.complete(fmt.Errorf("Exception returned: %s\n%s", exception.GetExceptionClassName(), exception.GetStackTrace()), nil)
+			call.complete(errors.Errorf("Exception returned: %s\n%s", exception.GetExceptionClassName(), exception.GetStackTrace()), nil)
 		} else if len(msgs) == 2 {
 			call.complete(nil, msgs[1])
 		}
@@ -182,7 +181,7 @@ func (c *connection) writeHead() error {
 	buf.WriteByte(0)
 	buf.WriteByte(80)
 	_, err := c.conn.Write(buf.Bytes())
-	return err
+	return errors.Trace(err)
 }
 
 func (c *connection) writeConnectionHeader() error {
@@ -199,17 +198,17 @@ func (c *connection) writeConnectionHeader() error {
 		ServiceName: service,
 	})
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	err = buf.PrependSize()
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	_, err = c.conn.Write(buf.Bytes())
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	return nil
@@ -219,6 +218,7 @@ func (c *connection) dispatch() {
 	for {
 		select {
 		case buf := <-c.in:
+			// TODO: add error check.
 			c.bw.Write(buf.Bytes())
 			if len(c.in) == 0 {
 				c.bw.Flush()

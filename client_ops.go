@@ -58,5 +58,5 @@ func (c *client) ServiceCall(table string, call *CoprocessorServiceCall) (*proto
 	case *exception:
 		return nil, errors.New(r.msg)
 	}
-	return nil, errors.Errorf("No valid response seen [response: %#v]", response)
+	return nil, errors.Errorf("Invalid response seen [response: %#v]", response)
 }
