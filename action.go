@@ -1,8 +1,6 @@
 package hbase
 
 import (
-	"reflect"
-
 	pb "github.com/golang/protobuf/proto"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
@@ -48,7 +46,7 @@ func (c *client) innerCall(table, row []byte, useCache bool, action action) (*ca
 			Call:   a.ToProto().(*proto.CoprocessorServiceCall),
 		})
 	default:
-		return nil, errors.Errorf("Unknown action - %v - %v", reflect.TypeOf(action), action)
+		return nil, errors.Errorf("Unknown action - %T - %v", action, action)
 	}
 
 	err = conn.call(cl)

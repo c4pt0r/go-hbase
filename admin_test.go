@@ -31,8 +31,8 @@ func (s *AdminTestSuit) SetUpTest(c *C) {
 	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("xxx"))
 	cf := NewColumnFamilyDescriptor("cf")
 	tblDesc.AddColumnDesc(cf)
-	cli.CreateTable(tblDesc, [][]byte{[]byte("f"), []byte("e"), []byte("c")})
-	log.Info("create table")
+	err := cli.CreateTable(tblDesc, [][]byte{[]byte("f"), []byte("e"), []byte("c")})
+	c.Assert(err, IsNil)
 }
 
 func (s *AdminTestSuit) TearDownTest(c *C) {
@@ -43,8 +43,9 @@ func (s *AdminTestSuit) TearDownTest(c *C) {
 
 func (s *AdminTestSuit) TestTblExists(c *C) {
 	cli, _ := NewClient(getTestZkHosts(), "/hbase")
-	b := cli.TableExists("xxx")
+	b, err := cli.TableExists("xxx")
 	c.Assert(b, IsTrue)
+	c.Assert(err, IsNil)
 }
 
 func (s *AdminTestSuit) TestCreateTableAsync(c *C) {
