@@ -4,7 +4,6 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
-	// "time"
 
 	"github.com/ngaut/log"
 	. "github.com/pingcap/check"
@@ -47,21 +46,6 @@ func (s *ScanTestSuit) SetUpSuite(c *C) {
 
 func (s *ScanTestSuit) TearDownSuite(c *C) {
 }
-
-// func (s *ScanTestSuit) TestScanInSplit(c *C) {
-// 	log.Info("begin scan")
-// 	scan := NewScan([]byte("scan_test"), 100, s.cli)
-// 	for {
-// 		r := scan.Next()
-// 		if r == nil || scan.Closed() {
-// 			break
-// 		}
-// 	}
-// 	if scan.Error() != nil {
-// 		log.Fatal(scan.Error())
-// 	}
-// 	time.Sleep(100 * time.Millisecond)
-// }
 
 func (s *ScanTestSuit) TestScan(c *C) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
