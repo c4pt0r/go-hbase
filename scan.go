@@ -12,11 +12,13 @@ import (
 func incrementByteString(d []byte, i int) []byte {
 	r := make([]byte, len(d))
 	copy(r, d)
+
 	// in case of: len(nil) - 1, e.g: scan(startKey, nil)
 	if i < 0 {
 		return append(make([]byte, 1), r...)
 	}
 	r[i]++
+
 	// carry handle
 	for i > 0 {
 		if r[i] == 0 {
@@ -26,11 +28,13 @@ func incrementByteString(d []byte, i int) []byte {
 			break
 		}
 	}
+
 	// i == 0, need add a new byte before array
 	if r[i] == 0 {
 		r = append(make([]byte, 1), r...)
 		r[0]++
 	}
+
 	return r
 }
 
@@ -81,13 +85,18 @@ func NewScan(table []byte, batchSize int, c HBaseClient) *Scan {
 	}
 }
 
-func (s *Scan) Close() {
+func (s *Scan) Close() error {
 	if s.closed {
-		return
+		return nil
 	}
 
-	s.closeScan(s.server, s.location, s.id)
+	err := s.closeScan(s.server, s.location, s.id)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	s.closed = true
+	return nil
 }
 
 func (s *Scan) AddStringColumn(family, qual string) {
@@ -100,15 +109,12 @@ func (s *Scan) AddStringFamily(family string) {
 
 func (s *Scan) AddColumn(family, qual []byte) {
 	s.AddFamily(family)
-
 	pos := s.posOfFamily(family)
-
 	s.qualifiers[pos] = append(s.qualifiers[pos], qual)
 }
 
 func (s *Scan) AddFamily(family []byte) {
 	pos := s.posOfFamily(family)
-
 	if pos == -1 {
 		s.families = append(s.families, family)
 		s.qualifiers = append(s.qualifiers, make([][]byte, 0))
@@ -173,6 +179,7 @@ func (s *Scan) getData(startKey []byte, retries int) ([]*ResultRow, error) {
 		NumberOfRows: pb.Uint32(uint32(s.numCached)),
 		Scan:         &proto.Scan{},
 	}
+
 	// set attributes
 	var attrs []*proto.NameBytesPair
 	for k, v := range s.attrs {
@@ -209,41 +216,54 @@ func (s *Scan) getData(startKey []byte, retries int) ([]*ResultRow, error) {
 			Qualifier: s.qualifiers[i],
 		})
 	}
+
 	cl := newCall(req)
-	server.call(cl)
-	select {
-	case msg := <-cl.responseCh:
-		rs := s.processResponse(msg)
-		if s.err != nil && (isNotInRegionError(s.err) || isUnknownScannerError(s.err)) {
-			if retries <= s.maxRetries {
-				// clean this table region cache and try again
-				s.client.CleanRegionCache(s.table)
-				// create new scanner and set startRow to lastResult
-				s.id = 0
-				if s.lastResult != nil {
-					startKey = s.lastResult.Row
-					s.skipFirst = true
-				}
-				s.server = nil
-				s.location = nil
-				s.err = nil
-				log.Warnf("Retryint get data for %d time(s)", retries+1)
-				RetrySleep(retries + 1)
-				return s.getData(startKey, retries+1)
-			}
-		}
-		return rs, nil
+	err = server.call(cl)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
+
+	msg := <-cl.responseCh
+	rs, err := s.processResponse(msg)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if s.err != nil && (isNotInRegionError(s.err) || isUnknownScannerError(s.err)) {
+		if retries <= s.maxRetries {
+			// clean this table region cache and try again
+			s.client.CleanRegionCache(s.table)
+			// create new scanner and set startRow to lastResult
+			s.id = 0
+			if s.lastResult != nil {
+				startKey = s.lastResult.Row
+				s.skipFirst = true
+			}
+			s.server = nil
+			s.location = nil
+			s.err = nil
+			log.Warnf("Retryint get data for %d time(s)", retries+1)
+			RetrySleep(retries + 1)
+			return s.getData(startKey, retries+1)
+		}
+	}
+	return rs, nil
 }
 
-func (s *Scan) processResponse(response pb.Message) []*ResultRow {
+func (s *Scan) processResponse(response pb.Message) ([]*ResultRow, error) {
 	var res *proto.ScanResponse
 	switch r := response.(type) {
 	case *proto.ScanResponse:
 		res = r
+	case *exception:
+		return nil, errors.New(r.msg)
 	default:
-		s.err = errors.New(response.(*exception).msg)
-		return nil
+		return nil, errors.Errorf("Invalid response seen [response: %#v]", response)
+	}
+
+	// Check whether response is nil.
+	if res == nil {
+		return nil, errors.Errorf("Empty response: [table=%s] [StartRow=%q] [StopRow=%q] ", s.table, s.StartRow, s.StopRow)
 	}
 
 	nextRegion := true
@@ -260,16 +280,24 @@ func (s *Scan) processResponse(response pb.Message) []*ResultRow {
 		nextRegion = false
 	}
 
+	var err error
 	if nextRegion {
+		err = s.closeScan(s.server, s.location, s.id)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+
 		s.nextStartKey = s.location.EndKey
-		s.closeScan(s.server, s.location, s.id)
 		s.server = nil
 		s.location = nil
 		s.id = 0
 	}
 
 	if n == 0 && !nextRegion {
-		s.Close()
+		err = s.Close()
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
 	}
 
 	if s.skipFirst {
@@ -277,6 +305,7 @@ func (s *Scan) processResponse(response pb.Message) []*ResultRow {
 		s.skipFirst = false
 		n = len(results)
 	}
+
 	tbr := make([]*ResultRow, n)
 	for i, v := range results {
 		if v != nil {
@@ -284,7 +313,7 @@ func (s *Scan) processResponse(response pb.Message) []*ResultRow {
 		}
 	}
 
-	return tbr
+	return tbr, nil
 }
 
 func (s *Scan) nextBatch() int {

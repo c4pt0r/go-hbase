@@ -61,6 +61,7 @@ func processMessage(msg []byte) ([][]byte, error) {
 	for {
 		hbytes, err := buf.DecodeRawBytes(true)
 		if err != nil {
+			// Check whether error is `unexpected EOF`.
 			if strings.Contains(err.Error(), "unexpected EOF") {
 				break
 			}
