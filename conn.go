@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"io"
 	"net"
+	"strings"
 	"sync"
 
 	pb "github.com/golang/protobuf/proto"
@@ -60,8 +61,12 @@ func processMessage(msg []byte) ([][]byte, error) {
 	for {
 		hbytes, err := buf.DecodeRawBytes(true)
 		if err != nil {
-			log.Debugf("Decode raw bytes error - %v", errors.ErrorStack(err))
-			break
+			if strings.Contains(err.Error(), "unexpected EOF") {
+				break
+			}
+
+			log.Errorf("Decode raw bytes error - %v", errors.ErrorStack(err))
+			return nil, errors.Trace(err)
 		}
 
 		payloads = append(payloads, hbytes)

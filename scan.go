@@ -279,7 +279,9 @@ func (s *Scan) processResponse(response pb.Message) []*ResultRow {
 	}
 	tbr := make([]*ResultRow, n)
 	for i, v := range results {
-		tbr[i] = NewResultRow(v)
+		if v != nil {
+			tbr[i] = NewResultRow(v)
+		}
 	}
 
 	return tbr

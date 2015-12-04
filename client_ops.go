@@ -26,7 +26,12 @@ func (c *client) Get(table string, get *Get) (*ResultRow, error) {
 
 	switch r := response.(type) {
 	case *proto.GetResponse:
-		return NewResultRow(r.GetResult()), nil
+		res := r.GetResult()
+		if res == nil {
+			return nil, errors.Errorf("Empty response: [table=%s] [row=%q]", table, get.GetRow())
+		}
+
+		return NewResultRow(res), nil
 	case *exception:
 		return nil, errors.New(r.msg)
 	}

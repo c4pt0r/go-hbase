@@ -3,7 +3,6 @@ package hbase
 import (
 	"bytes"
 
-	"github.com/ngaut/log"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/go-hbase/proto"
 )
@@ -79,7 +78,6 @@ func (s *HBasePutTestSuit) TestGetPut(c *C) {
 		if r == nil {
 			break
 		}
-		log.Info(r.SortedColumns[0].Row)
 	}
 
 	ok, err = cli.Delete("t2", NewDelete([]byte("1_\xff\xff")))
