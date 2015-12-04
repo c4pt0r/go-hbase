@@ -7,7 +7,6 @@ import (
 	. "github.com/pingcap/check"
 )
 
-// Hook up gocheck into the "go test" runner.
 func Test(t *testing.T) { TestingT(t) }
 
 type ColumnTestSuit struct{}
@@ -23,7 +22,8 @@ func (s *ColumnTestSuit) TestColumn(c *C) {
 	c.Assert(bytes.Compare(col.Qual, []byte("q")), Equals, 0)
 
 	buf := bytes.NewBuffer(nil)
-	col.Write(buf)
+	err := col.Write(buf)
+	c.Assert(err, IsNil)
 	c.Assert(buf.Bytes(), HasLen, 5)
 }
 
@@ -32,7 +32,8 @@ func (s *ColumnTestSuit) TestColumnCoordinate(c *C) {
 		[]byte("row"), []byte("cf"), []byte("q"))
 
 	buf := bytes.NewBuffer(nil)
-	cc.Write(buf)
+	err := cc.Write(buf)
+	c.Assert(err, IsNil)
 	c.Assert(buf.Bytes(), HasLen, 13)
 
 	cc2 := NewColumnCoordinate([]byte("tbl1"),

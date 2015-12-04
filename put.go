@@ -31,7 +31,6 @@ func (p *Put) GetRow() []byte {
 
 func (p *Put) AddValue(family, qual, value []byte) *Put {
 	pos := p.posOfFamily(family)
-
 	if pos == -1 {
 		p.Families = append(p.Families, family)
 		p.Qualifiers = append(p.Qualifiers, make([][]byte, 0))
@@ -78,7 +77,7 @@ func (p *Put) ToProto() pb.Message {
 			Family: family,
 		}
 
-		for j, _ := range p.Qualifiers[i] {
+		for j := range p.Qualifiers[i] {
 			cv.QualifierValue = append(cv.QualifierValue, &proto.MutationProto_ColumnValue_QualifierValue{
 				Qualifier: p.Qualifiers[i][j],
 				Value:     p.Values[i][j],

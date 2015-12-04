@@ -37,8 +37,10 @@ func (s *AdminTestSuit) SetUpTest(c *C) {
 
 func (s *AdminTestSuit) TearDownTest(c *C) {
 	cli, _ := NewClient(getTestZkHosts(), "/hbase")
-	cli.DisableTable(NewTableNameWithDefaultNS("xxx"))
-	cli.DropTable(NewTableNameWithDefaultNS("xxx"))
+	err := cli.DisableTable(NewTableNameWithDefaultNS("xxx"))
+	c.Assert(err, IsNil)
+	err = cli.DropTable(NewTableNameWithDefaultNS("xxx"))
+	c.Assert(err, IsNil)
 }
 
 func (s *AdminTestSuit) TestTblExists(c *C) {
@@ -50,6 +52,7 @@ func (s *AdminTestSuit) TestTblExists(c *C) {
 
 func (s *AdminTestSuit) TestCreateTableAsync(c *C) {
 	cli, _ := NewClient(getTestZkHosts(), "/hbase")
+
 	wg := sync.WaitGroup{}
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
@@ -69,7 +72,13 @@ func (s *AdminTestSuit) TestCreateTableAsync(c *C) {
 
 	for i := 0; i < 10; i++ {
 		tbl := NewTableNameWithDefaultNS(fmt.Sprintf("f_%d", i))
-		cli.DisableTable(tbl)
-		cli.DropTable(tbl)
+		err := cli.DisableTable(tbl)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = cli.DropTable(tbl)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }

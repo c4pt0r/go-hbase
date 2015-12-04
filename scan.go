@@ -86,9 +86,7 @@ func (s *Scan) Close() {
 		return
 	}
 
-	if s.server != nil && s.location != nil {
-		s.closeScan(s.server, s.location, s.id)
-	}
+	s.closeScan(s.server, s.location, s.id)
 	s.closed = true
 }
 
@@ -321,7 +319,11 @@ func (s *Scan) Next() *ResultRow {
 	return ret
 }
 
-func (s *Scan) closeScan(server *connection, location *RegionInfo, id uint64) {
+func (s *Scan) closeScan(server *connection, location *RegionInfo, id uint64) error {
+	if server == nil || location == nil {
+		return nil
+	}
+
 	req := &proto.ScanRequest{
 		Region: &proto.RegionSpecifier{
 			Type:  proto.RegionSpecifier_REGION_NAME.Enum(),
@@ -330,9 +332,16 @@ func (s *Scan) closeScan(server *connection, location *RegionInfo, id uint64) {
 		ScannerId:    pb.Uint64(id),
 		CloseScanner: pb.Bool(true),
 	}
+
 	cl := newCall(req)
-	server.call(cl)
+	err := server.call(cl)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	// TODO: add exception check.
 	<-cl.responseCh
+	return nil
 }
 
 func (s *Scan) getServerAndLocation(table, startRow []byte) (*connection, *RegionInfo, error) {

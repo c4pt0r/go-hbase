@@ -1,10 +1,10 @@
 package hbase
 
 import (
-	"fmt"
 	"strings"
 
 	pb "github.com/golang/protobuf/proto"
+	"github.com/juju/errors"
 	"github.com/pingcap/go-hbase/proto"
 )
 
@@ -34,7 +34,7 @@ func (g *Get) AddString(famqual string) error {
 	parts := strings.Split(famqual, ":")
 
 	if len(parts) > 2 {
-		return fmt.Errorf("Too many colons were found in the family:qualifier string. '%s'", famqual)
+		return errors.Errorf("Too many colons were found in the family:qualifier string. '%s'", famqual)
 	} else if len(parts) == 2 {
 		g.AddStringColumn(parts[0], parts[1])
 	} else {
@@ -84,12 +84,12 @@ func (g *Get) ToProto() pb.Message {
 		}
 	}
 
-	for v, _ := range g.Families {
+	for v := range g.Families {
 		col := &proto.Column{
 			Family: []byte(v),
 		}
 		var quals [][]byte
-		for qual, _ := range g.FamilyQuals[v] {
+		for qual := range g.FamilyQuals[v] {
 			quals = append(quals, []byte(qual))
 		}
 		col.Qualifier = quals

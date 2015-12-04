@@ -78,7 +78,7 @@ func (d *Delete) ToProto() pb.Message {
 		MutateType: proto.MutationProto_DELETE.Enum(),
 	}
 
-	for family, _ := range d.Families {
+	for family := range d.Families {
 		cv := &proto.MutationProto_ColumnValue{
 			Family:         []byte(family),
 			QualifierValue: make([]*proto.MutationProto_ColumnValue_QualifierValue, 0),
@@ -92,7 +92,7 @@ func (d *Delete) ToProto() pb.Message {
 			})
 		}
 
-		for qual, _ := range d.FamilyQuals[family] {
+		for qual := range d.FamilyQuals[family] {
 			v := &proto.MutationProto_ColumnValue_QualifierValue{
 				Qualifier:  []byte(qual),
 				Timestamp:  pb.Uint64(uint64(math.MaxInt64)),
