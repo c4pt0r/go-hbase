@@ -99,18 +99,14 @@ func (s *Scan) Close() error {
 	return nil
 }
 
-func (s *Scan) AddStringColumn(family, qual string) {
-	s.AddColumn([]byte(family), []byte(qual))
-}
-
-func (s *Scan) AddStringFamily(family string) {
-	s.AddFamily([]byte(family))
-}
-
 func (s *Scan) AddColumn(family, qual []byte) {
 	s.AddFamily(family)
 	pos := s.posOfFamily(family)
 	s.qualifiers[pos] = append(s.qualifiers[pos], qual)
+}
+
+func (s *Scan) AddStringColumn(family, qual string) {
+	s.AddColumn([]byte(family), []byte(qual))
 }
 
 func (s *Scan) AddFamily(family []byte) {
@@ -119,6 +115,10 @@ func (s *Scan) AddFamily(family []byte) {
 		s.families = append(s.families, family)
 		s.qualifiers = append(s.qualifiers, make([][]byte, 0))
 	}
+}
+
+func (s *Scan) AddStringFamily(family string) {
+	s.AddFamily([]byte(family))
 }
 
 func (s *Scan) posOfFamily(family []byte) int {
@@ -203,7 +203,7 @@ func (s *Scan) getData(startKey []byte, retries int) ([]*ResultRow, error) {
 	if s.MaxVersions > 0 {
 		req.Scan.MaxVersions = &s.MaxVersions
 	}
-	if s.TsRangeFrom >= 0 && s.TsRangeTo > 0 && s.TsRangeTo > s.TsRangeFrom {
+	if s.TsRangeTo > s.TsRangeFrom {
 		req.Scan.TimeRange = &proto.TimeRange{
 			From: pb.Uint64(s.TsRangeFrom),
 			To:   pb.Uint64(s.TsRangeTo),
@@ -228,7 +228,6 @@ func (s *Scan) getData(startKey []byte, retries int) ([]*ResultRow, error) {
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-
 	if s.err != nil && (isNotInRegionError(s.err) || isUnknownScannerError(s.err)) {
 		if retries <= s.maxRetries {
 			// clean this table region cache and try again

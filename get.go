@@ -44,18 +44,14 @@ func (g *Get) AddString(famqual string) error {
 	return nil
 }
 
-func (g *Get) AddStringColumn(family, qual string) *Get {
-	return g.AddColumn([]byte(family), []byte(qual))
-}
-
-func (g *Get) AddStringFamily(family string) *Get {
-	return g.AddFamily([]byte(family))
-}
-
 func (g *Get) AddColumn(family, qual []byte) *Get {
 	g.AddFamily(family)
 	g.FamilyQuals[string(family)].add(string(qual))
 	return g
+}
+
+func (g *Get) AddStringColumn(family, qual string) *Get {
+	return g.AddColumn([]byte(family), []byte(qual))
 }
 
 func (g *Get) AddFamily(family []byte) *Get {
@@ -64,6 +60,10 @@ func (g *Get) AddFamily(family []byte) *Get {
 		g.FamilyQuals[string(family)] = newSet()
 	}
 	return g
+}
+
+func (g *Get) AddStringFamily(family string) *Get {
+	return g.AddFamily([]byte(family))
 }
 
 func (g *Get) AddTimeRange(from uint64, to uint64) *Get {
