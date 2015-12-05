@@ -322,14 +322,24 @@ func (s *Scan) nextBatch() int {
 	}
 
 	// Notice: ignore error here.
-	rs, _ := s.getData(startKey, 0)
-	// current region get 0 data, switch next region
-	if rs != nil && len(rs) == 0 && s.nextStartKey != nil {
-		rs, _ = s.getData(s.nextStartKey, 0)
+	// TODO: add error check, now only add a log.
+	rs, err := s.getData(startKey, 0)
+	if err != nil {
+		log.Errorf("scan next batch failed - [startKey=%q], %v", startKey, errors.ErrorStack(err))
 	}
-	if rs == nil {
+
+	// current region get 0 data, switch next region
+	if len(rs) == 0 && s.nextStartKey != nil {
+		// TODO: add error check, now only add a log.
+		rs, err = s.getData(s.nextStartKey, 0)
+		if err != nil {
+			log.Errorf("scan next batch failed - [startKey=%q], %v", s.nextStartKey, errors.ErrorStack(err))
+		}
+	}
+	if len(rs) == 0 {
 		return 0
 	}
+
 	s.cache = rs
 	return len(s.cache)
 }
@@ -343,6 +353,7 @@ func (s *Scan) Next() *ResultRow {
 			return nil
 		}
 	}
+
 	ret = s.cache[0]
 	s.lastResult = ret
 	s.cache = s.cache[1:]
