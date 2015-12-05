@@ -11,7 +11,7 @@ type action interface {
 	ToProto() pb.Message
 }
 
-func (c *client) innerCall(table, row []byte, useCache bool, action action) (*call, error) {
+func (c *client) innerCall(table, row []byte, action action, useCache bool) (*call, error) {
 	region, err := c.LocateRegion(table, row, useCache)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -60,7 +60,7 @@ func (c *client) innerCall(table, row []byte, useCache bool, action action) (*ca
 
 func (c *client) innerDo(table, row []byte, action action, useCache bool) (pb.Message, error) {
 	// Try to create and send a new resuqest call.
-	cl, err := c.innerCall(table, row, useCache, action)
+	cl, err := c.innerCall(table, row, action, useCache)
 	if err != nil {
 		log.Warnf("inner call failed - %v", errors.ErrorStack(err))
 		// remove bad server cache and try again
@@ -77,7 +77,6 @@ func (c *client) do(table, row []byte, action action, useCache bool) (pb.Message
 		err    error
 	)
 
-	// TODO: check whether action type is valid.
 LOOP:
 	for i := 0; i < c.maxRetries; i++ {
 		result, err = c.innerDo(table, row, action, useCache)

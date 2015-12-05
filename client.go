@@ -340,7 +340,7 @@ func (c *client) LocateRegion(table, row []byte, useCache bool) (*RegionInfo, er
 		}
 	}
 
-	// If cache missed, try to get and update region info.
+	// If cache missed or not using cache, try to get and update region info.
 	metaRegion := c.getMetaRegion()
 	conn, err := c.getRegionConn(metaRegion.Server)
 	if err != nil {
@@ -388,7 +388,7 @@ func (c *client) LocateRegion(table, row []byte, useCache bool) (*RegionInfo, er
 	case *exception:
 		return nil, errors.New(r.msg)
 	default:
-		log.Warnf("[LocateRegion]Unknown response - %T - %v", r, r)
+		log.Warnf("Unknown response - %T - %v", r, r)
 	}
 
 	return nil, errors.Errorf("Couldn't find the region: [table=%s] [row=%q] [region_row=%q]", table, row, regionRow)

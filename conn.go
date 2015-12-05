@@ -256,7 +256,7 @@ func (c *connection) call(request *call) error {
 	}
 
 	// Buf =>
-	// | total size | pb1 size| pb1 | pb2 size | pb2 | ...
+	// | total size | pb1 size | pb1 | pb2 size | pb2 | ...
 	buf := iohelper.NewPbBuffer()
 	buf.WriteDelimitedBuffers(bfrh, bfr)
 
