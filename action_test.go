@@ -1,8 +1,6 @@
 package hbase
 
 import (
-	"fmt"
-
 	pb "github.com/golang/protobuf/proto"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/go-hbase/proto"
@@ -50,8 +48,7 @@ func (s *ActionTestSuit) SetUpTest(c *C) {
 	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS(s.tableName))
 	cf := NewColumnFamilyDescriptor("cf")
 	tblDesc.AddColumnDesc(cf)
-	err = s.cli.CreateTable(tblDesc, nil)
-	c.Assert(err, IsNil)
+	s.cli.CreateTable(tblDesc, nil)
 }
 
 func (s *ActionTestSuit) TearDownTest(c *C) {
@@ -60,16 +57,15 @@ func (s *ActionTestSuit) TearDownTest(c *C) {
 
 	err = s.cli.DropTable(NewTableNameWithDefaultNS(s.tableName))
 	c.Assert(err, IsNil)
-
-	fmt.Println("[drop table]", s.tableName)
 }
 
-func (s *ActionTestSuit) TestDo(c *C) {
+func (s *ActionTestSuit) TestAction(c *C) {
 	client, ok := s.cli.(*client)
 	c.Assert(ok, IsTrue)
 
-	row := []byte("row1")
-	value := []byte("value1")
+	row := []byte("row")
+	unknownRow := []byte("unknownRow")
+	value := []byte("value")
 	p := NewPut(row)
 	p.AddValue([]byte("cf"), []byte("q"), value)
 
@@ -126,11 +122,25 @@ func (s *ActionTestSuit) TestDo(c *C) {
 	c.Assert(client.cachedConns, HasLen, 2)
 	c.Assert(client.cachedRegionInfo, HasLen, 1)
 
+	// Test get action for an unknown row.
+	g = NewGet(unknownRow)
+	g.AddColumn([]byte("cf"), []byte("q"))
+
+	msg, err = client.do([]byte(s.tableName), row, g, true)
+	c.Assert(err, IsNil)
+
+	gres, ok = msg.(*proto.GetResponse)
+	c.Assert(ok, IsTrue)
+	rr = NewResultRow(gres.GetResult())
+	c.Assert(rr, IsNil)
+	c.Assert(client.cachedConns, HasLen, 2)
+	c.Assert(client.cachedRegionInfo, HasLen, 1)
+
 	// Test delete action.
 	d := NewDelete(row)
 	d.AddFamily([]byte("cf"))
 
-	msg, err = client.innerDo([]byte(s.tableName), row, d, true)
+	msg, err = client.do([]byte(s.tableName), row, d, true)
 	c.Assert(err, IsNil)
 
 	res, ok = msg.(*proto.MutateResponse)
@@ -139,12 +149,51 @@ func (s *ActionTestSuit) TestDo(c *C) {
 	c.Assert(client.cachedConns, HasLen, 2)
 	c.Assert(client.cachedRegionInfo, HasLen, 1)
 
-	// TODO: Test CoprocessorServiceCall.
+	// Test CoprocessorServiceCall.
+	cs := &CoprocessorServiceCall{
+		Row:          row,
+		ServiceName:  "ThemisService",
+		MethodName:   "themisGet",
+		RequestParam: nil,
+	}
+	msg, err = client.do([]byte(s.tableName), row, cs, true)
+	c.Assert(err, NotNil)
+	c.Assert(client.cachedConns, HasLen, 1)
+	c.Assert(client.cachedRegionInfo, HasLen, 1)
+
+	mm := &mockMessage{}
+	param, _ := pb.Marshal(mm)
+	cs = &CoprocessorServiceCall{
+		Row:          row,
+		ServiceName:  "ThemisService",
+		MethodName:   "themisGet",
+		RequestParam: param,
+	}
+	msg, err = client.do([]byte(s.tableName), row, cs, true)
+	c.Assert(err, NotNil)
+
+	_, ok = msg.(*exception)
+	c.Assert(ok, IsTrue)
+	c.Assert(client.cachedConns, HasLen, 2)
+	c.Assert(client.cachedRegionInfo, HasLen, 0)
+
+	cs = &CoprocessorServiceCall{
+		Row:          row,
+		ServiceName:  "UnknownService",
+		MethodName:   "UnknownMethod",
+		RequestParam: param,
+	}
+	msg, err = client.do([]byte(s.tableName), row, cs, true)
+	c.Assert(err, NotNil)
+
+	_, ok = msg.(*exception)
+	c.Assert(ok, IsTrue)
+	c.Assert(client.cachedConns, HasLen, 2)
+	c.Assert(client.cachedRegionInfo, HasLen, 0)
 
 	// Test error.
 	m := &mockAction{}
-
-	msg, err = client.innerDo([]byte(s.tableName), row, m, true)
+	msg, err = client.do([]byte(s.tableName), row, m, true)
 	c.Assert(err, NotNil)
 	c.Assert(client.cachedConns, HasLen, 2)
 	c.Assert(client.cachedRegionInfo, HasLen, 1)
