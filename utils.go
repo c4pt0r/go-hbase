@@ -6,7 +6,7 @@ import (
 	"github.com/juju/errors"
 )
 
-func RetrySleep(retries int) {
+func retrySleep(retries int) {
 	time.Sleep(time.Duration(retries*500) * time.Millisecond)
 }
 

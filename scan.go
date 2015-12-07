@@ -242,7 +242,7 @@ func (s *Scan) getData(startKey []byte, retries int) ([]*ResultRow, error) {
 			s.location = nil
 			s.err = nil
 			log.Warnf("Retryint get data for %d time(s)", retries+1)
-			RetrySleep(retries + 1)
+			retrySleep(retries + 1)
 			return s.getData(startKey, retries+1)
 		}
 	}
@@ -386,19 +386,19 @@ func (s *Scan) closeScan(server *connection, location *RegionInfo, id uint64) er
 }
 
 func (s *Scan) getServerAndLocation(table, startRow []byte) (*connection, *RegionInfo, error) {
-	var err error
-	if s.location == nil {
-		s.location, err = s.client.LocateRegion(table, startRow, true)
-		if err != nil {
-			return nil, nil, errors.Trace(err)
-		}
+	if s.server != nil && s.location != nil {
+		return s.server, s.location, nil
 	}
 
-	if s.server == nil {
-		s.server, err = s.client.getRegionConn(s.location.Server)
-		if err != nil {
-			return nil, nil, errors.Trace(err)
-		}
+	var err error
+	s.location, err = s.client.LocateRegion(table, startRow, true)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
+
+	s.server, err = s.client.getRegionConn(s.location.Server)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
 	}
 
 	return s.server, s.location, nil

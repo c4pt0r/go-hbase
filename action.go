@@ -92,7 +92,7 @@ LOOP:
 
 		useCache = false
 		log.Warnf("Retrying action for the %d time(s), error - %v", i+1, errors.ErrorStack(err))
-		RetrySleep(i + 1)
+		retrySleep(i + 1)
 	}
 
 	return result, errors.Trace(err)
