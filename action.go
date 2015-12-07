@@ -51,6 +51,7 @@ func (c *client) innerCall(table, row []byte, action action, useCache bool) (*ca
 
 	err = conn.call(cl)
 	if err != nil {
+		// If failed, remove bad server conn cache.
 		delete(c.cachedConns, region.Server)
 		return nil, errors.Trace(err)
 	}
@@ -63,7 +64,6 @@ func (c *client) innerDo(table, row []byte, action action, useCache bool) (pb.Me
 	cl, err := c.innerCall(table, row, action, useCache)
 	if err != nil {
 		log.Warnf("inner call failed - %v", errors.ErrorStack(err))
-		// remove bad server cache and try again
 		return nil, errors.Trace(err)
 	}
 
@@ -84,6 +84,7 @@ LOOP:
 			switch r := result.(type) {
 			case *exception:
 				err = errors.New(r.msg)
+				// If get an execption response, clean old region cache.
 				c.CleanRegionCache(table)
 			default:
 				break LOOP
