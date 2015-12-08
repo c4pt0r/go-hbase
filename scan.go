@@ -281,12 +281,11 @@ func (s *Scan) processResponse(response pb.Message) ([]*ResultRow, error) {
 
 	var err error
 	if nextRegion {
+		s.nextStartKey = s.location.EndKey
 		err = s.closeScan(s.server, s.location, s.id)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-
-		s.nextStartKey = s.location.EndKey
 		s.server = nil
 		s.location = nil
 		s.id = 0
