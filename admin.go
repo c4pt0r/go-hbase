@@ -92,11 +92,10 @@ func newColumnFamilyDescriptor(name string, versionsNum int) *ColumnFamilyDescri
 }
 
 func getPauseTime(retry int) int64 {
-	i := retry
-	if i > len(retryPauseTime) {
-		i = len(retryPauseTime) - 1
+	if retry >= len(retryPauseTime) {
+		retry = len(retryPauseTime) - 1
 	}
-	return retryPauseTime[i] * defaultRetryWaitMs
+	return retryPauseTime[retry] * defaultRetryWaitMs
 }
 
 func (c *client) CreateTable(t *TableDescriptor, splits [][]byte) error {
@@ -109,13 +108,12 @@ func (c *client) CreateTable(t *TableDescriptor, splits [][]byte) error {
 		Qualifier: []byte(t.name.name),
 		Namespace: []byte(t.name.namespace),
 	}
-	if len(t.attrs) != 0 {
-		for k, v := range t.attrs {
-			schema.Attributes = append(schema.Attributes, &proto.BytesBytesPair{
-				First:  []byte(k),
-				Second: []byte(v),
-			})
-		}
+
+	for k, v := range t.attrs {
+		schema.Attributes = append(schema.Attributes, &proto.BytesBytesPair{
+			First:  []byte(k),
+			Second: []byte(v),
+		})
 	}
 
 	for _, c := range t.cfs {
@@ -134,32 +132,38 @@ func (c *client) CreateTable(t *TableDescriptor, splits [][]byte) error {
 	req.TableSchema = schema
 	req.SplitKeys = splits
 
-	ch := c.adminAction(req)
+	ch, err := c.adminAction(req)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	resp := <-ch
 	switch r := resp.(type) {
 	case *exception:
 		return errors.New(r.msg)
 	}
+
 	// wait and check
 	for retry := 0; retry < defaultMaxActionRetries*retryLongerMultiplier; retry++ {
-		numRegs := 1
-		if splits != nil {
-			numRegs = len(splits) + 1
-		}
 		regCnt := 0
-		c.metaScan(t.name.name, func(r *RegionInfo) (bool, error) {
+		numRegs := len(splits) + 1
+		err = c.metaScan(t.name.name, func(r *RegionInfo) (bool, error) {
 			if !(r.Offline || r.Split) && len(r.Server) > 0 && r.TableName == t.name.name {
 				regCnt++
 			}
 			return true, nil
 		})
+		if err != nil {
+			return errors.Trace(err)
+		}
+
 		if regCnt == numRegs {
 			return nil
 		}
 		log.Info("sleep and try again")
 		time.Sleep(time.Duration(getPauseTime(retry)) * time.Millisecond)
 	}
-	return errors.Errorf("create table timeout")
+	return errors.New("create table timeout")
 }
 
 func (c *client) DisableTable(tblName TableName) error {
@@ -169,12 +173,18 @@ func (c *client) DisableTable(tblName TableName) error {
 			Namespace: []byte(tblName.namespace),
 		},
 	}
-	ch := c.adminAction(req)
+
+	ch, err := c.adminAction(req)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	resp := <-ch
 	switch r := resp.(type) {
 	case *exception:
 		return errors.New(r.msg)
 	}
+
 	return nil
 }
 
@@ -185,12 +195,18 @@ func (c *client) EnableTable(tblName TableName) error {
 			Namespace: []byte(tblName.namespace),
 		},
 	}
-	ch := c.adminAction(req)
+
+	ch, err := c.adminAction(req)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	resp := <-ch
 	switch r := resp.(type) {
 	case *exception:
 		return errors.New(r.msg)
 	}
+
 	return nil
 }
 
@@ -201,48 +217,59 @@ func (c *client) DropTable(tblName TableName) error {
 			Namespace: []byte(tblName.namespace),
 		},
 	}
-	ch := c.adminAction(req)
+
+	ch, err := c.adminAction(req)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	resp := <-ch
 	switch r := resp.(type) {
 	case *exception:
 		return errors.New(r.msg)
 	}
+
 	return nil
 }
 
 func (c *client) metaScan(tbl string, fn func(r *RegionInfo) (bool, error)) error {
 	scan := NewScan(metaTableName, 0, c)
-	if scan != nil {
-		defer scan.Close()
-	}
+	defer scan.Close()
 
-	startRow := []byte(tbl)
-	stopRow := incrementByteString([]byte(tbl), len([]byte(tbl))-1)
-
-	scan.StartRow = startRow
-	scan.StopRow = stopRow
+	scan.StartRow = []byte(tbl)
+	scan.StopRow = nextKey([]byte(tbl))
 
 	for {
 		r := scan.Next()
 		if r == nil || scan.Closed() {
 			break
 		}
-		region := c.parseRegion(r)
+
+		region, err := c.parseRegion(r)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
 		if more, err := fn(region); !more || err != nil {
-			return err
+			return errors.Trace(err)
 		}
 	}
+
 	return nil
 }
 
-func (c *client) TableExists(tbl string) bool {
+func (c *client) TableExists(tbl string) (bool, error) {
 	found := false
-	c.metaScan(tbl, func(region *RegionInfo) (bool, error) {
-		if region != nil && region.TableName == tbl {
+	err := c.metaScan(tbl, func(region *RegionInfo) (bool, error) {
+		if region.TableName == tbl {
 			found = true
 			return false, nil
 		}
 		return true, nil
 	})
-	return found
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+
+	return found, nil
 }

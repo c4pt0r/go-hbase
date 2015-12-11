@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 
 	pb "github.com/golang/protobuf/proto"
+	"github.com/juju/errors"
 )
 
 type PbBuffer struct {
@@ -50,28 +51,14 @@ func (b *PbBuffer) WriteFloat64(d float64) error {
 	return binary.Write(b, binary.BigEndian, d)
 }
 
-func (b *PbBuffer) WriteVarint32(n int32) error {
-	for true {
-		if (n & 0x7F) == 0 {
-			b.WriteByte(byte(n))
-			return nil
-		} else {
-			b.WriteByte(byte((n & 0x7F) | 0x80))
-			n >>= 7
-		}
-	}
-
-	return nil
-}
-
 func (b *PbBuffer) WritePBMessage(d pb.Message) error {
 	buf, err := pb.Marshal(d)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	_, err = b.Write(buf)
-	return err
+	return errors.Trace(err)
 }
 
 func (b *PbBuffer) WriteDelimitedBuffers(bufs ...*PbBuffer) error {
@@ -85,11 +72,21 @@ func (b *PbBuffer) WriteDelimitedBuffers(bufs ...*PbBuffer) error {
 		lens[i] = lenb
 	}
 
-	b.WriteInt32(int32(totalLength))
+	err := b.WriteInt32(int32(totalLength))
+	if err != nil {
+		return errors.Trace(err)
+	}
 
 	for i, v := range bufs {
-		b.Write(lens[i])
-		b.Write(v.Bytes())
+		_, err = b.Write(lens[i])
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		_, err = b.Write(v.Bytes())
+		if err != nil {
+			return errors.Trace(err)
+		}
 	}
 
 	return nil
@@ -101,12 +98,12 @@ func (b *PbBuffer) PrependSize() error {
 
 	err := newBuf.WriteInt32(size)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	_, err = newBuf.Write(b.b)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	*b = *newBuf

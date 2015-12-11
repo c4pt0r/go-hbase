@@ -3,16 +3,16 @@ package hbase
 import (
 	"bufio"
 	"bytes"
-	"errors"
-	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 
+	pb "github.com/golang/protobuf/proto"
+	"github.com/juju/errors"
+	"github.com/ngaut/log"
 	"github.com/pingcap/go-hbase/iohelper"
 	"github.com/pingcap/go-hbase/proto"
-	pb "github.com/golang/protobuf/proto"
-	"github.com/ngaut/log"
 )
 
 type idGenerator struct {
@@ -53,49 +53,61 @@ type connection struct {
 	ongoingCalls map[int]*call
 }
 
-func processMessage(msg []byte) [][]byte {
+func processMessage(msg []byte) ([][]byte, error) {
 	buf := pb.NewBuffer(msg)
 	payloads := make([][]byte, 0)
 
+	// Question: why can we ignore this error?
 	for {
 		hbytes, err := buf.DecodeRawBytes(true)
 		if err != nil {
-			break
+			// Check whether error is `unexpected EOF`.
+			if strings.Contains(err.Error(), "unexpected EOF") {
+				break
+			}
+
+			log.Errorf("Decode raw bytes error - %v", errors.ErrorStack(err))
+			return nil, errors.Trace(err)
 		}
 
 		payloads = append(payloads, hbytes)
 	}
 
-	return payloads
+	return payloads, nil
 }
 
 func readPayloads(r io.Reader) ([][]byte, error) {
 	nBytesExpecting, err := iohelper.ReadInt32(r)
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	if nBytesExpecting > 0 {
 		buf, err := iohelper.ReadN(r, nBytesExpecting)
-
-		if err != nil && err == io.EOF {
-			return nil, err
+		// Question: why should we return error only when we get an io.EOF error?
+		if err != nil && ErrorEqual(err, io.EOF) {
+			return nil, errors.Trace(err)
 		}
 
-		payloads := processMessage(buf)
+		payloads, err := processMessage(buf)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
 
 		if len(payloads) > 0 {
-			return payloads, err
+			return payloads, nil
 		}
 	}
+
 	return nil, errors.New("unexcepted payload")
 }
 
 func newConnection(addr string, isMaster bool) (*connection, error) {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
+
 	c := &connection{
 		addr:         addr,
 		bw:           bufio.NewWriter(conn),
@@ -105,26 +117,30 @@ func newConnection(addr string, isMaster bool) (*connection, error) {
 		idGen:        newIdGenerator(),
 		ongoingCalls: map[int]*call{},
 	}
+
 	err = c.init()
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
+
 	return c, nil
 }
 
 func (c *connection) init() error {
 	err := c.writeHead()
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
+
 	err = c.writeConnectionHeader()
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
+
 	go func() {
 		err := c.processMessages()
 		if err != nil {
-			log.Warn(err)
+			log.Warnf("process messages failed - %v", errors.ErrorStack(err))
 			return
 		}
 	}()
@@ -136,13 +152,13 @@ func (c *connection) processMessages() error {
 	for {
 		msgs, err := readPayloads(c.conn)
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 
 		var rh proto.ResponseHeader
 		err = pb.Unmarshal(msgs[0], &rh)
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 
 		callId := rh.GetCallId()
@@ -150,14 +166,14 @@ func (c *connection) processMessages() error {
 		call, ok := c.ongoingCalls[int(callId)]
 		if !ok {
 			c.mu.Unlock()
-			return fmt.Errorf("Invalid call id: %d", callId)
+			return errors.Errorf("Invalid call id: %d", callId)
 		}
 		delete(c.ongoingCalls, int(callId))
 		c.mu.Unlock()
 
 		exception := rh.GetException()
 		if exception != nil {
-			call.complete(fmt.Errorf("Exception returned: %s\n%s", exception.GetExceptionClassName(), exception.GetStackTrace()), nil)
+			call.complete(errors.Errorf("Exception returned: %s\n%s", exception.GetExceptionClassName(), exception.GetStackTrace()), nil)
 		} else if len(msgs) == 2 {
 			call.complete(nil, msgs[1])
 		}
@@ -171,7 +187,7 @@ func (c *connection) writeHead() error {
 	buf.WriteByte(0)
 	buf.WriteByte(80)
 	_, err := c.conn.Write(buf.Bytes())
-	return err
+	return errors.Trace(err)
 }
 
 func (c *connection) writeConnectionHeader() error {
@@ -188,17 +204,17 @@ func (c *connection) writeConnectionHeader() error {
 		ServiceName: service,
 	})
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	err = buf.PrependSize()
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	_, err = c.conn.Write(buf.Bytes())
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	return nil
@@ -208,6 +224,7 @@ func (c *connection) dispatch() {
 	for {
 		select {
 		case buf := <-c.in:
+			// TODO: add error check.
 			c.bw.Write(buf.Bytes())
 			if len(c.in) == 0 {
 				c.bw.Flush()
@@ -229,34 +246,25 @@ func (c *connection) call(request *call) error {
 	bfrh := iohelper.NewPbBuffer()
 	err := bfrh.WritePBMessage(rh)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	bfr := iohelper.NewPbBuffer()
 	err = bfr.WritePBMessage(request.request)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
+	// Buf =>
+	// | total size | pb1 size | pb1 | pb2 size | pb2 | ...
 	buf := iohelper.NewPbBuffer()
-	//Buf=> | total size | pb1 size| pb1 size | pb2 size | pb2 | ...
 	buf.WriteDelimitedBuffers(bfrh, bfr)
 
 	c.mu.Lock()
 	c.ongoingCalls[id] = request
-	//n, err := c.conn.Write(buf.Bytes())
 	c.in <- buf
 	c.mu.Unlock()
 
-	/*
-		if err != nil {
-			return err
-		}
-
-		if n != len(buf.Bytes()) {
-			return fmt.Errorf("Sent bytes not match number bytes [n=%d] [actual_n=%d]", n, len(buf.Bytes()))
-		}
-	*/
 	return nil
 }
 

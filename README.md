@@ -1,5 +1,7 @@
 #go-hbase
 
+[![Build Status](https://travis-ci.org/pingcap/go-hbase.svg)](https://travis-ci.org/pingcap/go-hbase)
+
 Derived from [Lazyshot/go-hbase](https://github.com/Lazyshot/go-hbase). Add some new features and fix some bugs.
 
 ## New Features

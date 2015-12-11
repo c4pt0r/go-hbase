@@ -4,14 +4,13 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
-	"time"
 
-	"github.com/ngaut/log"
 	. "github.com/pingcap/check"
 )
 
 type ScanTestSuit struct {
-	cli HBaseClient
+	cli       HBaseClient
+	tableName string
 }
 
 var _ = Suite(&ScanTestSuit{})
@@ -25,16 +24,12 @@ func (s *ScanTestSuit) SetUpSuite(c *C) {
 	s.cli, err = NewClient(getTestZkHosts(), "/hbase")
 	c.Assert(err, Equals, nil)
 
-	log.Info("create table")
-	table := NewTableNameWithDefaultNS("scan_test")
-	s.cli.DisableTable(table)
-	s.cli.DropTable(table)
-
+	s.tableName = "scan_test"
+	table := NewTableNameWithDefaultNS(s.tableName)
 	tblDesc := NewTableDesciptor(table)
 	cf := newColumnFamilyDescriptor("cf", 3)
 	tblDesc.AddColumnDesc(cf)
-	err = s.cli.CreateTable(tblDesc, nil)
-	c.Assert(err, IsNil)
+	s.cli.CreateTable(tblDesc, nil)
 
 	for i := 1; i <= 10000; i++ {
 		p := NewPut([]byte(strconv.Itoa(i)))
@@ -46,21 +41,31 @@ func (s *ScanTestSuit) SetUpSuite(c *C) {
 }
 
 func (s *ScanTestSuit) TearDownSuite(c *C) {
+	err := s.cli.DisableTable(NewTableNameWithDefaultNS(s.tableName))
+	c.Assert(err, IsNil)
+
+	err = s.cli.DropTable(NewTableNameWithDefaultNS(s.tableName))
+	c.Assert(err, IsNil)
 }
 
-func (s *ScanTestSuit) TestScanInSplit(c *C) {
-	log.Info("begin scan")
-	scan := NewScan([]byte("scan_test"), 100, s.cli)
-	for {
-		r := scan.Next()
-		if r == nil || scan.Closed() {
-			break
-		}
+func (s *ScanTestSuit) TestNextKey(c *C) {
+	inputs := []struct {
+		data   []byte
+		result []byte
+	}{
+		{nil, []byte{0}},
+		{[]byte{}, []byte{0}},
+		{[]byte{0}, []byte{1}},
+		{[]byte{1, 2, 3}, []byte{1, 2, 4}},
+		{[]byte{1, 255}, []byte{2, 0}},
+		{[]byte{255}, []byte{0, 0}},
+		{[]byte{255, 255}, []byte{0, 0, 0}},
 	}
-	if scan.Error() != nil {
-		log.Fatal(scan.Error())
+
+	for _, input := range inputs {
+		result := nextKey(input.data)
+		c.Assert(result, BytesEquals, input.result, Commentf("%v - %v - %v", input.data, input.result, result))
 	}
-	time.Sleep(100 * time.Millisecond)
 }
 
 func (s *ScanTestSuit) TestScan(c *C) {

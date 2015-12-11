@@ -43,18 +43,14 @@ func (d *Delete) GetRow() []byte {
 	return d.Row
 }
 
-func (d *Delete) AddStringColumn(family, qual string) *Delete {
-	return d.AddColumn([]byte(family), []byte(qual))
-}
-
-func (d *Delete) AddStringFamily(family string) *Delete {
-	return d.AddFamily([]byte(family))
-}
-
 func (d *Delete) AddColumn(family, qual []byte) *Delete {
 	d.AddFamily(family)
 	d.FamilyQuals[string(family)].add(string(qual))
 	return d
+}
+
+func (d *Delete) AddStringColumn(family, qual string) *Delete {
+	return d.AddColumn([]byte(family), []byte(qual))
 }
 
 func (d *Delete) AddFamily(family []byte) *Delete {
@@ -63,6 +59,10 @@ func (d *Delete) AddFamily(family []byte) *Delete {
 		d.FamilyQuals[string(family)] = newSet()
 	}
 	return d
+}
+
+func (d *Delete) AddStringFamily(family string) *Delete {
+	return d.AddFamily([]byte(family))
 }
 
 func (d *Delete) AddColumnWithTimestamp(family, qual []byte, ts uint64) *Delete {
@@ -78,7 +78,7 @@ func (d *Delete) ToProto() pb.Message {
 		MutateType: proto.MutationProto_DELETE.Enum(),
 	}
 
-	for family, _ := range d.Families {
+	for family := range d.Families {
 		cv := &proto.MutationProto_ColumnValue{
 			Family:         []byte(family),
 			QualifierValue: make([]*proto.MutationProto_ColumnValue_QualifierValue, 0),
@@ -92,7 +92,7 @@ func (d *Delete) ToProto() pb.Message {
 			})
 		}
 
-		for qual, _ := range d.FamilyQuals[family] {
+		for qual := range d.FamilyQuals[family] {
 			v := &proto.MutationProto_ColumnValue_QualifierValue{
 				Qualifier:  []byte(qual),
 				Timestamp:  pb.Uint64(uint64(math.MaxInt64)),

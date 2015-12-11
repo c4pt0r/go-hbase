@@ -2,6 +2,7 @@ package hbase
 
 import (
 	"fmt"
+
 	"github.com/pingcap/go-hbase/proto"
 )
 

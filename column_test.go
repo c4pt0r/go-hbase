@@ -7,7 +7,6 @@ import (
 	. "github.com/pingcap/check"
 )
 
-// Hook up gocheck into the "go test" runner.
 func Test(t *testing.T) { TestingT(t) }
 
 type ColumnTestSuit struct{}
@@ -23,8 +22,9 @@ func (s *ColumnTestSuit) TestColumn(c *C) {
 	c.Assert(bytes.Compare(col.Qual, []byte("q")), Equals, 0)
 
 	buf := bytes.NewBuffer(nil)
-	col.Write(buf)
-	c.Assert(len(buf.Bytes()), Equals, 5)
+	err := col.Write(buf)
+	c.Assert(err, IsNil)
+	c.Assert(buf.Bytes(), HasLen, 5)
 }
 
 func (s *ColumnTestSuit) TestColumnCoordinate(c *C) {
@@ -32,15 +32,16 @@ func (s *ColumnTestSuit) TestColumnCoordinate(c *C) {
 		[]byte("row"), []byte("cf"), []byte("q"))
 
 	buf := bytes.NewBuffer(nil)
-	cc.Write(buf)
-	c.Assert(len(buf.Bytes()), Equals, 13)
+	err := cc.Write(buf)
+	c.Assert(err, IsNil)
+	c.Assert(buf.Bytes(), HasLen, 13)
 
 	cc2 := NewColumnCoordinate([]byte("tbl1"),
 		[]byte("row"), []byte("cf"), []byte("q"))
 
-	c.Assert(cc.Equal(cc2), Equals, false)
+	c.Assert(cc.Equal(cc2), IsFalse)
 	cc2.Table = []byte("tbl")
-	c.Assert(cc.Equal(cc2), Equals, true)
+	c.Assert(cc.Equal(cc2), IsTrue)
 
 	c.Assert(cc.String(), Equals, "\x03tbl\x03row\x02cf\x01q")
 }
