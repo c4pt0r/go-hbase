@@ -13,6 +13,7 @@ import (
 // for example:
 // nil -> [0]
 // [] -> [0]
+// [0] -> [1]
 // [1, 2, 3] -> [1, 2, 4]
 // [1, 255] -> [2, 0]
 // [255] -> [0, 0]
@@ -37,7 +38,7 @@ func nextKey(data []byte) []byte {
 
 	// Check whether need to add another byte for carry bit,
 	// like [255] -> [0, 0]
-	if i == 0 {
+	if data[i] == 0 {
 		data = append([]byte{0}, data...)
 	}
 

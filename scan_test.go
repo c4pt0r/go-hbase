@@ -48,6 +48,26 @@ func (s *ScanTestSuit) TearDownSuite(c *C) {
 	c.Assert(err, IsNil)
 }
 
+func (s *ScanTestSuit) TestNextKey(c *C) {
+	inputs := []struct {
+		data   []byte
+		result []byte
+	}{
+		{nil, []byte{0}},
+		{[]byte{}, []byte{0}},
+		{[]byte{0}, []byte{1}},
+		{[]byte{1, 2, 3}, []byte{1, 2, 4}},
+		{[]byte{1, 255}, []byte{2, 0}},
+		{[]byte{255}, []byte{0, 0}},
+		{[]byte{255, 255}, []byte{0, 0, 0}},
+	}
+
+	for _, input := range inputs {
+		result := nextKey(input.data)
+		c.Assert(result, BytesEquals, input.result, Commentf("%v - %v - %v", input.data, input.result, result))
+	}
+}
+
 func (s *ScanTestSuit) TestScan(c *C) {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	wg := sync.WaitGroup{}
