@@ -342,9 +342,6 @@ func (s *Scan) nextBatch() int {
 			log.Errorf("scan next batch failed - [startKey=%q], %v", s.nextStartKey, errors.ErrorStack(err))
 		}
 	}
-	if len(rs) == 0 {
-		return 0
-	}
 
 	s.cache = rs
 	return len(s.cache)
