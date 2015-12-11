@@ -9,33 +9,39 @@ import (
 	"github.com/pingcap/go-hbase/proto"
 )
 
-func incrementByteString(d []byte, i int) []byte {
-	r := make([]byte, len(d))
-	copy(r, d)
-
-	// in case of: len(nil) - 1, e.g: scan(startKey, nil)
-	if i < 0 {
-		return append(make([]byte, 1), r...)
+// nextKey returns the next key in byte-order.
+// for example:
+// nil -> [0]
+// [] -> [0]
+// [1, 2, 3] -> [1, 2, 4]
+// [1, 255] -> [2, 0]
+// [255] -> [0, 0]
+func nextKey(data []byte) []byte {
+	// nil or []byte{}
+	dataLen := len(data)
+	if dataLen == 0 {
+		return []byte{0}
 	}
-	r[i]++
 
-	// carry handle
+	// Check and process carry bit.
+	i := dataLen - 1
+	data[i]++
 	for i > 0 {
-		if r[i] == 0 {
+		if data[i] == 0 {
 			i--
-			r[i]++
+			data[i]++
 		} else {
 			break
 		}
 	}
 
-	// i == 0, need add a new byte before array
-	if r[i] == 0 {
-		r = append(make([]byte, 1), r...)
-		r[0]++
+	// Check whether need to add another byte for carry bit,
+	// like [255] -> [0, 0]
+	if i == 0 {
+		data = append([]byte{0}, data...)
 	}
 
-	return r
+	return data
 }
 
 const (
