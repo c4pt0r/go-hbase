@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/ngaut/log"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/go-hbase/proto"
 )
@@ -22,19 +21,24 @@ func (s *HBaseGetTestSuit) SetUpTest(c *C) {
 	s.cli, err = NewClient(getTestZkHosts(), "/hbase")
 	c.Assert(err, IsNil)
 
-	if s.cli.TableExists("t1") {
+	b, err := s.cli.TableExists("t1")
+	c.Assert(err, IsNil)
+	if b {
 		s.TearDownTest(c)
 	}
 	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("t1"))
 	cf := NewColumnFamilyDescriptor("cf")
 	tblDesc.AddColumnDesc(cf)
-	s.cli.CreateTable(tblDesc, nil)
-	log.Info("create table")
+	err = s.cli.CreateTable(tblDesc, nil)
+	c.Assert(err, IsNil)
 }
 
 func (s *HBaseGetTestSuit) TearDownTest(c *C) {
-	s.cli.DisableTable(NewTableNameWithDefaultNS("t1"))
-	s.cli.DropTable(NewTableNameWithDefaultNS("t1"))
+	err := s.cli.DisableTable(NewTableNameWithDefaultNS("t1"))
+	c.Assert(err, IsNil)
+
+	err = s.cli.DropTable(NewTableNameWithDefaultNS("t1"))
+	c.Assert(err, IsNil)
 }
 
 func (s *HBaseGetTestSuit) TestGet(c *C) {
@@ -47,22 +51,22 @@ func (s *HBaseGetTestSuit) TestGet(c *C) {
 	msg := g.ToProto()
 	p, _ := msg.(*proto.Get)
 
-	c.Assert(len(p.Column), Equals, 2)
+	c.Assert(p.Column, HasLen, 2)
 
 	for _, col := range p.Column {
 		if bytes.Compare([]byte("cf"), col.Family) == 0 {
-			c.Assert(len(col.Qualifier), Equals, 2)
+			c.Assert(col.Qualifier, HasLen, 2)
 		} else {
-			c.Assert(len(col.Qualifier), Equals, 0)
+			c.Assert(col.Qualifier, HasLen, 0)
 		}
 	}
 }
 
-func (s *HBaseGetTestSuit) TestNotExist(c *C) {
+func (s *HBaseGetTestSuit) TestGetWithClient(c *C) {
 	// get item not exists
 	g := NewGet([]byte("nosuchrow"))
 	r, err := s.cli.Get("nosuchtable", g)
-	c.Assert(err.Error(), Equals, "Create region server connection failed")
+	c.Assert(err, NotNil)
 	c.Assert(r, IsNil)
 
 	r, err = s.cli.Get("t1", g)
@@ -80,7 +84,7 @@ func (s *HBaseGetTestSuit) TestConcurrentGet(c *C) {
 			p := NewPut([]byte("test"))
 			p.AddValue([]byte("cf"), []byte("q"), []byte(strconv.Itoa(i)))
 			b, err := s.cli.Put("t1", p)
-			c.Assert(b, Equals, true)
+			c.Assert(b, IsTrue)
 			c.Assert(err, IsNil)
 		}(i)
 	}

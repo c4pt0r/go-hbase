@@ -3,32 +3,33 @@ package hbase
 import (
 	"bytes"
 
-	"github.com/ngaut/log"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/go-hbase/proto"
 )
 
-type HBasePutTestSuit struct{}
+type HBasePutTestSuit struct {
+	cli HBaseClient
+}
 
 var _ = Suite(&HBasePutTestSuit{})
 
 func (s *HBasePutTestSuit) SetUpTest(c *C) {
-	cli, _ := NewClient(getTestZkHosts(), "/hbase")
-
-	if cli.TableExists("t1") {
-		s.TearDownTest(c)
-	}
-	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("t1"))
+	var err error
+	s.cli, err = NewClient(getTestZkHosts(), "/hbase")
+	c.Assert(err, IsNil)
+	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("t2"))
 	cf := NewColumnFamilyDescriptor("cf")
 	tblDesc.AddColumnDesc(cf)
-	cli.CreateTable(tblDesc, nil)
-	log.Info("create table")
+	err = s.cli.CreateTable(tblDesc, nil)
+	c.Assert(err, IsNil)
 }
 
 func (s *HBasePutTestSuit) TearDownTest(c *C) {
-	cli, _ := NewClient(getTestZkHosts(), "/hbase")
-	cli.DisableTable(NewTableNameWithDefaultNS("t1"))
-	cli.DropTable(NewTableNameWithDefaultNS("t1"))
+	err := s.cli.DisableTable(NewTableNameWithDefaultNS("t2"))
+	c.Assert(err, IsNil)
+
+	err = s.cli.DropTable(NewTableNameWithDefaultNS("t2"))
+	c.Assert(err, IsNil)
 }
 
 func (s *HBasePutTestSuit) TestPut(c *C) {
@@ -56,35 +57,38 @@ func (s *HBasePutTestSuit) TestGetPut(c *C) {
 	p3.AddValue([]byte("cf"), []byte("q"), []byte("!"))
 
 	cli, err := NewClient(getTestZkHosts(), "/hbase")
+	c.Assert(err, Equals, nil)
+
+	ok, err := cli.Put("t2", p)
+	c.Assert(ok, IsTrue)
 	c.Assert(err, IsNil)
 
-	cli.Put("t1", p)
-	cli.Put("t1", p2)
-	cli.Put("t1", p3)
-
-	g := NewGet([]byte("1_\xff\xff"))
-	r, err := cli.Get("t1", g)
+	ok, err = cli.Put("t2", p2)
+	c.Assert(ok, IsTrue)
 	c.Assert(err, IsNil)
-	c.Assert(string(r.Row), Equals, "1_\xff\xff")
-	c.Assert(string(r.Columns["cf:q"].Family), Equals, "cf")
-	c.Assert(string(r.Columns["cf:q"].Qual), Equals, "q")
-	c.Assert(string(r.Columns["cf:q"].Value), Equals, "!")
-	g2 := NewGet([]byte("1_\xff\xfe"))
-	r2, err := cli.Get("t1", g2)
-	c.Assert(string(r2.Row), Equals, "1_\xff\xfe")
-	g3 := NewGet([]byte("1_\xff\xee"))
-	r3, err := cli.Get("t1", g3)
-	c.Assert(string(r3.Row), Equals, "1_\xff\xee")
 
-	cli.Delete("t1", NewDelete([]byte("1_\xff\xff")))
-	cli.Delete("t1", NewDelete([]byte("1_\xff\xfe")))
-	cli.Delete("t1", NewDelete([]byte("1_\xff\xee")))
-}
+	ok, err = cli.Put("t2", p3)
+	c.Assert(ok, IsTrue)
+	c.Assert(err, IsNil)
 
-func (s *HBasePutTestSuit) TestPutError(c *C) {
-	cli, err := NewClient(getTestZkHosts(), "/hbase")
-	p := NewPut([]byte("1_\xff\xff"))
-	succ, err := cli.Put("nosuchtable", p)
-	c.Assert(succ, Equals, false)
-	c.Assert(err.Error(), Equals, "Create region server connection failed")
+	scan := NewScan([]byte("t2"), 100, cli)
+	scan.StartRow = []byte("1_")
+	for {
+		r := scan.Next()
+		if r == nil {
+			break
+		}
+	}
+
+	ok, err = cli.Delete("t2", NewDelete([]byte("1_\xff\xff")))
+	c.Assert(ok, IsTrue)
+	c.Assert(err, IsNil)
+
+	ok, err = cli.Delete("t2", NewDelete([]byte("1_\xff\xfe")))
+	c.Assert(ok, IsTrue)
+	c.Assert(err, IsNil)
+
+	ok, err = cli.Delete("t2", NewDelete([]byte("1_\xff\xee")))
+	c.Assert(ok, IsTrue)
+	c.Assert(err, IsNil)
 }

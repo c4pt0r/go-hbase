@@ -28,7 +28,7 @@ func isUnknownScannerError(err error) bool {
 
 func (m *exception) Reset()         { *m = exception{} }
 func (m *exception) String() string { return m.msg }
-func (*exception) ProtoMessage()    {}
+func (m *exception) ProtoMessage()  {}
 
 func newCall(request pb.Message) *call {
 	var responseBuffer pb.Message
@@ -85,10 +85,10 @@ func (c *call) complete(err error, response []byte) {
 		return
 	}
 
-	err2 := pb.Unmarshal(response, c.responseBuffer)
-	if err2 != nil {
+	err = pb.Unmarshal(response, c.responseBuffer)
+	if err != nil {
 		c.responseCh <- &exception{
-			msg: err2.Error(),
+			msg: err.Error(),
 		}
 		return
 	}
