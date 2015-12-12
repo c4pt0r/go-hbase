@@ -209,7 +209,7 @@ func (c *client) getConn(addr string, srvType ServiceType) (*connection, error) 
 	return conn, nil
 }
 
-func (c *client) getRegionConn(addr string) (*connection, error) {
+func (c *client) getAdminConn(addr string) (*connection, error) {
 	return c.getConn(addr, AdminService)
 }
 
@@ -240,7 +240,7 @@ func (c *client) adminAction(req pb.Message) (chan pb.Message, error) {
 }
 
 func (c *client) regionAction(addr string, req pb.Message) (chan pb.Message, error) {
-	conn, err := c.getRegionConn(addr)
+	conn, err := c.getAdminConn(addr)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

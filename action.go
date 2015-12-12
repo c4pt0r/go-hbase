@@ -17,7 +17,7 @@ func (c *client) innerCall(table, row []byte, action action, useCache bool) (*ca
 		return nil, errors.Trace(err)
 	}
 
-	conn, err := c.getRegionConn(region.Server)
+	conn, err := c.getClientConn(region.Server)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

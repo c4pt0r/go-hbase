@@ -103,14 +103,14 @@ func (s *AdminTestSuit) TestCreateTableAsync(c *C) {
 
 func (s *AdminTestSuit) TestGetRegions(c *C) {
 	cli, _ := NewClient(getTestZkHosts(), "/hbase")
-	regions, err := cli.GetRegions([]byte("xxx"), false)
+	regions, err := cli.GetRegions([]byte(s.tableName), false)
 	c.Assert(err, IsNil)
 	c.Assert(regions, HasLen, 4)
 }
 
 func (s *AdminTestSuit) TestTableAutoSplit(c *C) {
 	cli, _ := NewClient(getTestZkHosts(), "/hbase")
-	regions, err := cli.GetRegions([]byte("xxx"), false)
+	regions, err := cli.GetRegions([]byte(s.tableName), false)
 	c.Assert(err, IsNil)
 	c.Assert(regions, HasLen, 4)
 	for c := 'b'; c < 'f'; c++ {
@@ -119,36 +119,36 @@ func (s *AdminTestSuit) TestTableAutoSplit(c *C) {
 		for i := 0; i < 10000; i++ {
 			p := NewPut([]byte(fmt.Sprintf("%c_%d", c, i)))
 			p.AddStringValue("cf", "c", fmt.Sprintf("%c%c_%d", c, c, i))
-			cli.Put("xxx", p)
+			cli.Put(s.tableName, p)
 		}
 	}
 	// just split first 3 region
-	err = cli.Split("xxx", "")
+	err = cli.Split(s.tableName, "")
 	c.Assert(err, IsNil)
 
 	// sleep wait Split finish
 	time.Sleep(1000 * time.Millisecond)
-	regions, err = cli.GetRegions([]byte("xxx"), false)
+	regions, err = cli.GetRegions([]byte(s.tableName), false)
 	c.Assert(err, IsNil)
 	c.Assert(regions, HasLen, 7)
 }
 
 func (s *AdminTestSuit) TestTableSplit(c *C) {
 	cli, _ := NewClient(getTestZkHosts(), "/hbase")
-	regions, err := cli.GetRegions([]byte("xxx"), false)
+	regions, err := cli.GetRegions([]byte(s.tableName), false)
 	c.Assert(err, IsNil)
 	c.Assert(regions, HasLen, 4)
 	for i := 0; i < 100; i++ {
 		p := NewPut([]byte(fmt.Sprintf("b_%d", i)))
 		p.AddStringValue("cf", "c", fmt.Sprintf("bb_%d", i))
-		cli.Put("xxx", p)
+		cli.Put(s.tableName, p)
 	}
-	err = cli.Split("xxx", "b_2")
+	err = cli.Split(s.tableName, "b_2")
 	c.Assert(err, IsNil)
 
 	// sleep wait Split finish
 	time.Sleep(500 * time.Millisecond)
-	regions, err = cli.GetRegions([]byte("xxx"), false)
+	regions, err = cli.GetRegions([]byte(s.tableName), false)
 	c.Assert(err, IsNil)
 	c.Assert(regions, HasLen, 5)
 }

@@ -161,7 +161,7 @@ func (c *client) CreateTable(t *TableDescriptor, splits [][]byte) error {
 		if regCnt == numRegs {
 			return nil
 		}
-		log.Info("sleep and try again")
+		log.Warnf("Retrying create table for the %d time(s)", retry+1)
 		time.Sleep(time.Duration(getPauseTime(retry)) * time.Millisecond)
 	}
 	return errors.New("create table timeout")

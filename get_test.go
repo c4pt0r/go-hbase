@@ -21,11 +21,6 @@ func (s *HBaseGetTestSuit) SetUpTest(c *C) {
 	s.cli, err = NewClient(getTestZkHosts(), "/hbase")
 	c.Assert(err, IsNil)
 
-	b, err := s.cli.TableExists("t1")
-	c.Assert(err, IsNil)
-	if b {
-		s.TearDownTest(c)
-	}
 	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("t1"))
 	cf := NewColumnFamilyDescriptor("cf")
 	tblDesc.AddColumnDesc(cf)

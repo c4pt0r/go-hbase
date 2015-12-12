@@ -399,7 +399,7 @@ func (s *Scan) getServerAndLocation(table, startRow []byte) (*connection, *Regio
 		return nil, nil, errors.Trace(err)
 	}
 
-	s.server, err = s.client.getRegionConn(s.location.Server)
+	s.server, err = s.client.getClientConn(s.location.Server)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
