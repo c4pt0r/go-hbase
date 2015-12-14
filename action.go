@@ -52,7 +52,7 @@ func (c *client) innerCall(table, row []byte, action action, useCache bool) (*ca
 	err = conn.call(cl)
 	if err != nil {
 		// If failed, remove bad server conn cache.
-		delete(c.cachedConns, region.Server)
+		delete(c.cachedConns, addrAndServiceToCache(region.Server, ClientService))
 		return nil, errors.Trace(err)
 	}
 
