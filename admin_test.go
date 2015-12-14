@@ -115,7 +115,7 @@ func (s *AdminTestSuit) TestTableAutoSplit(c *C) {
 	c.Assert(regions, HasLen, 4)
 	for c := 'b'; c < 'f'; c++ {
 		// b_0, b_1, ...
-		// if use themis but insert few row, it may not be splited even invoke Split explict
+		// if insert few row, it may not be splited even invoke Split explict
 		for i := 0; i < 10000; i++ {
 			p := NewPut([]byte(fmt.Sprintf("%c_%d", c, i)))
 			p.AddStringValue("cf", "c", fmt.Sprintf("%c%c_%d", c, c, i))
@@ -127,7 +127,7 @@ func (s *AdminTestSuit) TestTableAutoSplit(c *C) {
 	c.Assert(err, IsNil)
 
 	// sleep wait Split finish
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 	regions, err = cli.GetRegions([]byte(s.tableName), false)
 	c.Assert(err, IsNil)
 	c.Assert(regions, HasLen, 7)
