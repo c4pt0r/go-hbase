@@ -239,20 +239,22 @@ func (s *ScanTestSuit) TestScanCrossMultiRegions(c *C) {
 	c.Assert(cnt, Equals, 2000)
 }
 
+// TODO: add a map to check data integrity
 func (s *ScanTestSuit) TestScanWhileSplit(c *C) {
 	scan := NewScan([]byte(s.tableName), 100, s.cli)
 	cnt := 0
+	// Scan to a random row, like 1987 or whatever.
 	for i := 1; i <= 1987; i++ {
 		r := scan.Next()
 		c.Assert(r, NotNil)
 		cnt++
 	}
 	c.Assert(cnt, Equals, 1987)
+	// At this time, regions is splitting.
 	err := s.cli.Split(s.tableName, "2048")
 	c.Assert(err, IsNil)
-	// Sleep wait Split finish.
-	time.Sleep(1 * time.Second)
 
+	// Scan is go on, and get data normally.
 	for i := 1988; i <= 2500; i++ {
 		r := scan.Next()
 		c.Assert(r, NotNil)

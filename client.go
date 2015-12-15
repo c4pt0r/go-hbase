@@ -9,10 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/juju/errors"
-
 	pb "github.com/golang/protobuf/proto"
-
+	"github.com/juju/errors"
 	"github.com/ngaut/go-zookeeper/zk"
 	"github.com/ngaut/log"
 	"github.com/pingcap/go-hbase/proto"

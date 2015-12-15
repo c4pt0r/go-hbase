@@ -101,6 +101,7 @@ func (s *AdminTestSuit) TestGetRegions(c *C) {
 	c.Assert(regions, HasLen, 4)
 }
 
+// TODO: add a map to check data integrity
 func (s *AdminTestSuit) TestTableAutoSplit(c *C) {
 	regions, err := s.cli.GetRegions([]byte(s.tableName), false)
 	c.Assert(err, IsNil)
