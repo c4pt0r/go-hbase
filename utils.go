@@ -4,13 +4,21 @@ import (
 	"bytes"
 	"time"
 
-	"github.com/pingcap/go-hbase/proto"
-
 	"github.com/juju/errors"
+	"github.com/pingcap/go-hbase/proto"
 )
 
 func retrySleep(retries int) {
 	time.Sleep(time.Duration(retries*500) * time.Millisecond)
+}
+
+func findKey(region *RegionInfo, key []byte) bool {
+	if region == nil {
+		return false
+	}
+	// StartKey <= key < EndKey
+	return (len(region.StartKey) == 0 || bytes.Compare(region.StartKey, key) <= 0) &&
+		(len(region.EndKey) == 0 || bytes.Compare(key, region.EndKey) < 0)
 }
 
 func NewRegionSpecifier(regionName string) *proto.RegionSpecifier {
@@ -18,16 +26,6 @@ func NewRegionSpecifier(regionName string) *proto.RegionSpecifier {
 		Type:  proto.RegionSpecifier_REGION_NAME.Enum(),
 		Value: []byte(regionName),
 	}
-}
-
-func FindKey(region *RegionInfo, key []byte) bool {
-	if region == nil {
-		return false
-	}
-	// StartKey <= key < EndKey
-	return (region.StartKey == nil || bytes.Compare(region.StartKey, key) <= 0) &&
-		(region.EndKey == nil || len(region.EndKey) == 0 ||
-			bytes.Compare(key, region.EndKey) < 0)
 }
 
 // TODO: The following functions can be moved later.

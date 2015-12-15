@@ -103,7 +103,8 @@ type client struct {
 func serverNameToAddr(server *proto.ServerName) string {
 	return fmt.Sprintf("%s:%d", server.GetHostName(), server.GetPort())
 }
-func addrAndServiceToCache(addr string, srvType ServiceType) string {
+
+func cachedConnKey(addr string, srvType ServiceType) string {
 	return fmt.Sprintf("%s|%d", addr, srvType)
 }
 
@@ -167,13 +168,15 @@ func (c *client) init() error {
 	}
 
 	log.Debug("connect root region server...", c.rootServerName)
-	conn, err := newConnection(serverNameToAddr(c.rootServerName), ClientService)
+	serverAddr := serverNameToAddr(c.rootServerName)
+	conn, err := newConnection(serverAddr, ClientService)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	// set buffered regionserver conn
-	c.cachedConns[addrAndServiceToCache(serverNameToAddr(c.rootServerName), ClientService)] = conn
+	// Set buffered regionserver conn.
+	cachedKey := cachedConnKey(serverAddr, ClientService)
+	c.cachedConns[cachedKey] = conn
 
 	res, _, _, err = c.zkClient.GetW(c.zkRoot + zkMasterAddrPath)
 	if err != nil {
@@ -190,8 +193,9 @@ func (c *client) init() error {
 
 // get connection
 func (c *client) getConn(addr string, srvType ServiceType) (*connection, error) {
+	connKey := cachedConnKey(addr, srvType)
 	c.mu.RLock()
-	conn, ok := c.cachedConns[addrAndServiceToCache(addr, srvType)]
+	conn, ok := c.cachedConns[connKey]
 	c.mu.RUnlock()
 
 	if ok {
@@ -204,7 +208,7 @@ func (c *client) getConn(addr string, srvType ServiceType) (*connection, error) 
 		return nil, errors.Errorf("create new connection failed - %v", errors.ErrorStack(err))
 	}
 	c.mu.Lock()
-	c.cachedConns[addrAndServiceToCache(addr, srvType)] = conn
+	c.cachedConns[connKey] = conn
 	c.mu.Unlock()
 	return conn, nil
 }
@@ -417,10 +421,10 @@ func (c *client) LocateRegion(table, row []byte, useCache bool) (*RegionInfo, er
 func (c *client) GetRegions(table []byte, useCache bool) ([]*RegionInfo, error) {
 	var regions []*RegionInfo
 	startKey := []byte("")
-	// get first region
+	// Get first region.
 	region, err := c.LocateRegion(table, []byte(startKey), useCache)
 	if err != nil {
-		return nil, errors.Errorf("Couldn't find any region")
+		return nil, errors.Errorf("couldn't find any region: [table=%s] [useCache=%t]", table, useCache)
 	}
 	regions = append(regions, region)
 	startKey = region.EndKey

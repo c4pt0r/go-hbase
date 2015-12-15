@@ -321,7 +321,7 @@ func (s *Scan) nextBatch() int {
 		log.Errorf("scan next batch failed - [startKey=%q], %v", startKey, errors.ErrorStack(err))
 	}
 
-	// Current region get 0 data, try switch next region.
+	// Current region get 0 data, try switch to next region.
 	if len(rs) == 0 && len(s.nextStartKey) > 0 {
 		// TODO: add error check, now only add a log.
 		rs, err = s.getData(s.nextStartKey, 0)

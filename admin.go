@@ -275,11 +275,11 @@ func (c *client) TableExists(tbl string) (bool, error) {
 	return found, nil
 }
 
-// Split split region
-// tblOrRegion table name or region(<tbl>,<endKey>,<timestamp>.<md5>)
-// splitPoint split point which is a key, leave "" if want to split automatically
+// Split splits region.
+// tblOrRegion table name or region(<tbl>,<endKey>,<timestamp>.<md5>).
+// splitPoint which is a key, leave "" if want to split each region automatically.
 func (c *client) Split(tblOrRegion, splitPoint string) error {
-	// extract table name from supposing regionName
+	// Extract table name from supposing regionName.
 	tbls := strings.SplitN(tblOrRegion, ",", 2)
 	tbl := tbls[0]
 	found := false
@@ -292,29 +292,29 @@ func (c *client) Split(tblOrRegion, splitPoint string) error {
 		}
 		return true, nil
 	})
-	// this is a region name, split it directly
+	// This is a region name, split it directly.
 	if found {
 		return c.split(foundRegion, []byte(splitPoint))
 	}
-	// this may be a table name
+	// This is a table name.
 	tbl = tblOrRegion
 	regions, err := c.GetRegions([]byte(tbl), false)
 	if err != nil {
 		return errors.Trace(err)
 	}
-	// split all region
+	// Split each region.
 	for _, region := range regions {
 		err := c.split(region, []byte(splitPoint))
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 	}
 	return nil
 }
 
 func (c *client) split(region *RegionInfo, splitPoint []byte) error {
-	// not in this region, skip it
-	if len(splitPoint) > 0 && !FindKey(region, splitPoint) {
+	// Not in this region, skip it.
+	if len(splitPoint) > 0 && !findKey(region, splitPoint) {
 		return nil
 	}
 	c.CleanRegionCache([]byte(region.TableName))
@@ -325,7 +325,7 @@ func (c *client) split(region *RegionInfo, splitPoint []byte) error {
 	if len(splitPoint) > 0 {
 		req.SplitPoint = splitPoint
 	}
-	// empty response
+	// Empty response.
 	_, err := c.regionAction(region.Server, req)
 	if err != nil {
 		return errors.Trace(err)

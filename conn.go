@@ -15,10 +15,10 @@ import (
 	"github.com/pingcap/go-hbase/proto"
 )
 
-type ServiceType int
+type ServiceType byte
 
 const (
-	MasterMonitorService = iota
+	MasterMonitorService = iota + 1
 	MasterService
 	MasterAdminService
 	AdminService
@@ -128,7 +128,7 @@ func newConnection(addr string, srvType ServiceType) (*connection, error) {
 		return nil, errors.Trace(err)
 	}
 	if _, ok := ServiceString[srvType]; !ok {
-		return nil, errors.New("unexpected service type")
+		return nil, errors.Errorf("unexpected service type [serviceType=%d]", srvType)
 	}
 	c := &connection{
 		addr:         addr,

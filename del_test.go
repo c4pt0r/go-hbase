@@ -72,7 +72,6 @@ func (s *HBaseDelTestSuit) TestDelWithClient(c *C) {
 	c.Assert(ok, IsTrue)
 	c.Assert(err, IsNil)
 
-	// check it
 	g := NewGet([]byte("test"))
 	g.AddStringFamily("cf")
 	r, err := s.cli.Get("t2", g)
