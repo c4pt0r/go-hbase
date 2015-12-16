@@ -33,11 +33,11 @@ func NewTableDesciptor(tblName TableName) *TableDescriptor {
 		name:  tblName,
 		attrs: map[string][]byte{},
 	}
-	ret.AddStrAddr("IS_META", "false")
+	ret.AddAddr("IS_META", "false")
 	return ret
 }
 
-func (c *TableDescriptor) AddStrAddr(attrName string, val string) {
+func (c *TableDescriptor) AddAddr(attrName string, val string) {
 	c.attrs[attrName] = []byte(val)
 }
 
@@ -55,11 +55,7 @@ type ColumnFamilyDescriptor struct {
 	attrs map[string][]byte
 }
 
-func (c *ColumnFamilyDescriptor) AddAttr(attrName string, val []byte) {
-	c.attrs[attrName] = val
-}
-
-func (c *ColumnFamilyDescriptor) AddStrAddr(attrName string, val string) {
+func (c *ColumnFamilyDescriptor) AddAttr(attrName string, val string) {
 	c.attrs[attrName] = []byte(val)
 }
 
@@ -77,17 +73,17 @@ func newColumnFamilyDescriptor(name string, versionsNum int) *ColumnFamilyDescri
 	}
 
 	// add default attrs
-	ret.AddStrAddr("DATA_BLOCK_ENCODING", "NONE")
-	ret.AddStrAddr("BLOOMFILTER", "ROW")
-	ret.AddStrAddr("REPLICATION_SCOPE", "0")
-	ret.AddStrAddr("COMPRESSION", "NONE")
-	ret.AddStrAddr("VERSIONS", versions)
-	ret.AddStrAddr("TTL", "2147483647") // 1 << 31
-	ret.AddStrAddr("MIN_VERSIONS", "0")
-	ret.AddStrAddr("KEEP_DELETED_CELLS", "false")
-	ret.AddStrAddr("BLOCKSIZE", "65536")
-	ret.AddStrAddr("IN_MEMORY", "false")
-	ret.AddStrAddr("BLOCKCACHE", "true")
+	ret.AddAttr("DATA_BLOCK_ENCODING", "NONE")
+	ret.AddAttr("BLOOMFILTER", "ROW")
+	ret.AddAttr("REPLICATION_SCOPE", "0")
+	ret.AddAttr("COMPRESSION", "NONE")
+	ret.AddAttr("VERSIONS", versions)
+	ret.AddAttr("TTL", "2147483647") // 1 << 31
+	ret.AddAttr("MIN_VERSIONS", "0")
+	ret.AddAttr("KEEP_DELETED_CELLS", "false")
+	ret.AddAttr("BLOCKSIZE", "65536")
+	ret.AddAttr("IN_MEMORY", "false")
+	ret.AddAttr("BLOCKCACHE", "true")
 	return ret
 }
 
