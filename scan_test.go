@@ -12,14 +12,12 @@ import (
 type ScanTestSuit struct {
 	cli       HBaseClient
 	tableName string
-	oriData   map[string]map[string]string
 }
 
 var _ = Suite(&ScanTestSuit{})
 
-func (s *ScanTestSuit) SetUpSuite(c *C) {
+func (s *ScanTestSuit) SetUpTest(c *C) {
 	var (
-		ok  bool
 		err error
 	)
 
@@ -32,22 +30,9 @@ func (s *ScanTestSuit) SetUpSuite(c *C) {
 	cf := newColumnFamilyDescriptor("cf", 3)
 	tblDesc.AddColumnDesc(cf)
 	s.cli.CreateTable(tblDesc, nil)
-
-	s.oriData = map[string]map[string]string{}
-	for i := 1; i <= 10000; i++ {
-		p := NewPut([]byte(strconv.Itoa(i)))
-		p.AddValue([]byte("cf"), []byte("q"), []byte(strconv.Itoa(i)))
-		ok, err = s.cli.Put(s.tableName, p)
-		c.Assert(ok, IsTrue)
-		c.Assert(err, IsNil)
-
-		rowKey := string(p.Row)
-		s.oriData[rowKey] = map[string]string{}
-		s.oriData[rowKey]["cf:q"] = string(p.Values[0][0])
-	}
 }
 
-func (s *ScanTestSuit) TearDownSuite(c *C) {
+func (s *ScanTestSuit) TearDownTest(c *C) {
 	err := s.cli.DisableTable(NewTableNameWithDefaultNS(s.tableName))
 	c.Assert(err, IsNil)
 
@@ -76,6 +61,13 @@ func (s *ScanTestSuit) TestNextKey(c *C) {
 }
 
 func (s *ScanTestSuit) TestScan(c *C) {
+	for i := 1; i <= 10000; i++ {
+		p := NewPut([]byte(strconv.Itoa(i)))
+		p.AddValue([]byte("cf"), []byte("qscan"), []byte(strconv.Itoa(i)))
+		ok, err := s.cli.Put(s.tableName, p)
+		c.Assert(ok, IsTrue)
+		c.Assert(err, IsNil)
+	}
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	wg := sync.WaitGroup{}
 
@@ -102,9 +94,21 @@ func (s *ScanTestSuit) TestScan(c *C) {
 	}
 
 	wg.Wait()
+
+	for i := 1; i <= 10000; i++ {
+		d := NewDelete([]byte(strconv.Itoa(i)))
+		s.cli.Delete(s.tableName, d)
+	}
 }
 
 func (s *ScanTestSuit) TestScanWithVersion(c *C) {
+	for i := 1; i <= 10000; i++ {
+		p := NewPut([]byte(strconv.Itoa(i)))
+		p.AddValue([]byte("cf"), []byte("q"), []byte(strconv.Itoa(i)))
+		ok, err := s.cli.Put(s.tableName, p)
+		c.Assert(ok, IsTrue)
+		c.Assert(err, IsNil)
+	}
 	// Test version put.
 	p := NewPut([]byte("99999"))
 	p.AddValue([]byte("cf"), []byte("q"), []byte("1002"))
@@ -227,9 +231,26 @@ func (s *ScanTestSuit) TestScanWithVersion(c *C) {
 	r = scan.Next()
 	c.Assert(r, IsNil)
 	scan.Close()
+
+	for i := 1; i <= 10000; i++ {
+		d := NewDelete([]byte(strconv.Itoa(i)))
+		s.cli.Delete(s.tableName, d)
+	}
 }
 
 func (s *ScanTestSuit) TestScanCrossMultiRegions(c *C) {
+	origData := map[string]map[string]string{}
+	for i := 1; i <= 2000; i++ {
+		p := NewPut([]byte(strconv.Itoa(i)))
+		p.AddValue([]byte("cf"), []byte("qmulti"), []byte(strconv.Itoa(i)))
+		ok, err := s.cli.Put(s.tableName, p)
+		c.Assert(ok, IsTrue)
+		c.Assert(err, IsNil)
+
+		rowKey := string(p.Row)
+		origData[rowKey] = map[string]string{}
+		origData[rowKey]["cf:qmulti"] = string(p.Values[0][0])
+	}
 	err := s.cli.Split(s.tableName, "1024")
 	c.Assert(err, IsNil)
 	// Sleep wait Split finish.
@@ -240,12 +261,40 @@ func (s *ScanTestSuit) TestScanCrossMultiRegions(c *C) {
 	for i := 1; i <= 2000; i++ {
 		r := scan.Next()
 		c.Assert(r, NotNil)
+		rowKey := string(r.Row)
+		origRow, ok := origData[rowKey]
+		c.Assert(ok, IsTrue)
+		c.Assert(origRow, NotNil)
+		for column := range r.Columns {
+			origValue, ok := origRow[column]
+			c.Assert(ok, IsTrue)
+			value := string(r.Columns[column].Value)
+			c.Assert(origValue, Equals, value)
+		}
+		delete(origData, rowKey)
 		cnt++
 	}
 	c.Assert(cnt, Equals, 2000)
+
+	for i := 1; i <= 2000; i++ {
+		d := NewDelete([]byte(strconv.Itoa(i)))
+		s.cli.Delete(s.tableName, d)
+	}
 }
 
 func (s *ScanTestSuit) TestScanWhileSplit(c *C) {
+	origData := map[string]map[string]string{}
+	for i := 1; i <= 3000; i++ {
+		p := NewPut([]byte(strconv.Itoa(i)))
+		p.AddValue([]byte("cf"), []byte("qsplit"), []byte(strconv.Itoa(i)))
+		ok, err := s.cli.Put(s.tableName, p)
+		c.Assert(ok, IsTrue)
+		c.Assert(err, IsNil)
+
+		rowKey := string(p.Row)
+		origData[rowKey] = map[string]string{}
+		origData[rowKey]["cf:qsplit"] = string(p.Values[0][0])
+	}
 	scan := NewScan([]byte(s.tableName), 100, s.cli)
 	cnt := 0
 	// Scan to a random row, like 1987 or whatever.
@@ -253,15 +302,16 @@ func (s *ScanTestSuit) TestScanWhileSplit(c *C) {
 		r := scan.Next()
 		c.Assert(r, NotNil)
 		rowKey := string(r.Row)
-		oriRow, ok := s.oriData[rowKey]
+		origRow, ok := origData[rowKey]
 		c.Assert(ok, IsTrue)
-		c.Assert(oriRow, NotNil)
+		c.Assert(origRow, NotNil)
 		for column := range r.Columns {
-			oriValue, ok := oriRow[column]
-			value := string(r.Columns[column].Value)
+			origValue, ok := origRow[column]
 			c.Assert(ok, IsTrue)
-			c.Assert(oriValue, Equals, value)
+			value := string(r.Columns[column].Value)
+			c.Assert(origValue, Equals, value)
 		}
+		delete(origData, rowKey)
 		cnt++
 	}
 	c.Assert(cnt, Equals, 1987)
@@ -272,25 +322,44 @@ func (s *ScanTestSuit) TestScanWhileSplit(c *C) {
 	time.Sleep(1 * time.Second)
 
 	// Scan is go on, and get data normally.
-	for i := 1988; i <= 2500; i++ {
+	for i := 1988; i <= 3000; i++ {
 		r := scan.Next()
 		c.Assert(r, NotNil)
 		rowKey := string(r.Row)
-		oriRow, ok := s.oriData[rowKey]
+		origRow, ok := origData[rowKey]
 		c.Assert(ok, IsTrue)
-		c.Assert(oriRow, NotNil)
+		c.Assert(origRow, NotNil)
 		for column := range r.Columns {
-			oriValue, ok := oriRow[column]
+			origValue, ok := origRow[column]
+			c.Assert(ok, IsTrue)
+			value := string(r.Columns[column].Value)
+			c.Assert(origValue, Equals, value)
+		}
+		for column := range r.Columns {
+			origValue, ok := origRow[column]
 			value := string(r.Columns[column].Value)
 			c.Assert(ok, IsTrue)
-			c.Assert(oriValue, Equals, value)
+			c.Assert(origValue, Equals, value)
 		}
+		delete(origData, rowKey)
 		cnt++
 	}
-	c.Assert(cnt, Equals, 2500)
+	c.Assert(cnt, Equals, 3000)
+
+	for i := 1; i <= 3000; i++ {
+		d := NewDelete([]byte(strconv.Itoa(i)))
+		s.cli.Delete(s.tableName, d)
+	}
 }
 
 func (s *ScanTestSuit) TestScanClose(c *C) {
+	for i := 1; i <= 100; i++ {
+		p := NewPut([]byte(strconv.Itoa(i)))
+		p.AddValue([]byte("cf"), []byte("qclose"), []byte(strconv.Itoa(i)))
+		ok, err := s.cli.Put(s.tableName, p)
+		c.Assert(ok, IsTrue)
+		c.Assert(err, IsNil)
+	}
 	// Do not get any data.
 	scan := NewScan([]byte(s.tableName), 100, s.cli)
 	err := scan.Close()
@@ -302,9 +371,14 @@ func (s *ScanTestSuit) TestScanClose(c *C) {
 	scan = NewScan([]byte(s.tableName), 100, s.cli)
 	r = scan.Next()
 	c.Assert(r, NotNil)
-	// If scanner Close, then do not fetch any data even cache still has some
+	// If scanner Close, then do not fetch any data even cache still has some.
 	err = scan.Close()
 	c.Assert(err, IsNil)
 	r = scan.Next()
 	c.Assert(r, IsNil)
+
+	for i := 1; i <= 100; i++ {
+		d := NewDelete([]byte(strconv.Itoa(i)))
+		s.cli.Delete(s.tableName, d)
+	}
 }
