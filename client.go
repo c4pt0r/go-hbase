@@ -72,6 +72,7 @@ type HBaseClient interface {
 	TableExists(tbl string) (bool, error)
 	DropTable(t TableName) error
 	DisableTable(t TableName) error
+	EnableTable(t TableName) error
 	CreateTable(t *TableDescriptor, splits [][]byte) error
 	ServiceCall(table string, call *CoprocessorServiceCall) (*proto.CoprocessorServiceResponse, error)
 	LocateRegion(table, row []byte, useCache bool) (*RegionInfo, error)
