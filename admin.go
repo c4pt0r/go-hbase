@@ -91,6 +91,9 @@ func getPauseTime(retry int) int64 {
 	if retry >= len(retryPauseTime) {
 		retry = len(retryPauseTime) - 1
 	}
+	if retry < 0 {
+		retry = 0
+	}
 	return retryPauseTime[retry] * defaultRetryWaitMs
 }
 
