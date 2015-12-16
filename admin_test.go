@@ -91,6 +91,19 @@ func (s *AdminTestSuit) TestTable(c *C) {
 	b, err = s.cli.TableExists(s.invalidTableName)
 	c.Assert(err, IsNil)
 	c.Assert(b, IsFalse)
+
+	// Test disable unexisted table.
+	tbl = NewTableNameWithDefaultNS(s.invalidTableName)
+	err = s.cli.DisableTable(tbl)
+	c.Assert(err, NotNil)
+
+	// Test enable unexisted table.
+	err = s.cli.EnableTable(tbl)
+	c.Assert(err, NotNil)
+
+	// Test drop unexisted table.
+	err = s.cli.DropTable(tbl)
+	c.Assert(err, NotNil)
 }
 
 func (s *AdminTestSuit) TestCreateTableAsync(c *C) {
@@ -132,15 +145,6 @@ func (s *AdminTestSuit) TestCreateTableAsync(c *C) {
 		err = s.cli.DropTable(tbl)
 		c.Assert(err, IsNil)
 	}
-
-	// Test disable unexisted table.
-	tbl := NewTableNameWithDefaultNS(s.invalidTableName)
-	err := s.cli.DisableTable(tbl)
-	c.Assert(err, NotNil)
-
-	// Test enable unexisted table.
-	err = s.cli.EnableTable(tbl)
-	c.Assert(err, NotNil)
 }
 
 func (s *AdminTestSuit) TestGetPauseTime(c *C) {
@@ -235,7 +239,20 @@ func (s *AdminTestSuit) TestTableSplit(c *C) {
 
 	// Sleep wait Split finish.
 	time.Sleep(500 * time.Millisecond)
+
 	regions, err = s.cli.GetRegions([]byte(s.tableName), false)
 	c.Assert(err, IsNil)
 	c.Assert(regions, HasLen, 5)
+
+	// Test directly split region.
+	err = s.cli.Split(regions[1].Name, "b_50")
+	c.Assert(err, IsNil)
+
+	// Sleep wait Split finish.
+	time.Sleep(500 * time.Millisecond)
+
+	regions, err = s.cli.GetRegions([]byte(s.tableName), false)
+	c.Assert(err, IsNil)
+	c.Assert(regions, HasLen, 6)
+
 }

@@ -283,7 +283,7 @@ func (c *client) Split(tblOrRegion, splitPoint string) error {
 	tbl := tbls[0]
 	found := false
 	var foundRegion *RegionInfo
-	c.metaScan(tbl, func(region *RegionInfo) (bool, error) {
+	err := c.metaScan(tbl, func(region *RegionInfo) (bool, error) {
 		if region != nil && region.Name == tblOrRegion {
 			found = true
 			foundRegion = region
@@ -291,10 +291,15 @@ func (c *client) Split(tblOrRegion, splitPoint string) error {
 		}
 		return true, nil
 	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	// This is a region name, split it directly.
 	if found {
 		return c.split(foundRegion, []byte(splitPoint))
 	}
+
 	// This is a table name.
 	tbl = tblOrRegion
 	regions, err := c.GetRegions([]byte(tbl), false)
