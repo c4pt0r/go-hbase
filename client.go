@@ -429,7 +429,7 @@ func (c *client) GetRegions(table []byte, useCache bool) ([]*RegionInfo, error) 
 	for len(startKey) > 0 {
 		region, err = c.LocateRegion(table, []byte(startKey), useCache)
 		if err != nil {
-			break
+			return nil, errors.Trace(err)
 		}
 		regions = append(regions, region)
 		startKey = region.EndKey

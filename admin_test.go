@@ -125,7 +125,7 @@ func (s *AdminTestSuit) TestTableAutoSplit(c *C) {
 	err = s.cli.Split(s.tableName, "")
 	c.Assert(err, IsNil)
 	// Sleep wait Split finish.
-	time.Sleep(1 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	regions, err = s.cli.GetRegions([]byte(s.tableName), false)
 	c.Assert(err, IsNil)
