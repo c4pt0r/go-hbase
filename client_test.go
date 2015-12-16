@@ -1,8 +1,6 @@
 package hbase
 
-import (
-	. "github.com/pingcap/check"
-)
+import . "github.com/pingcap/check"
 
 type ClientTestSuit struct {
 	cli HBaseClient

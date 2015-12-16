@@ -62,6 +62,9 @@ func newCall(request pb.Message) *call {
 	case *proto.MultiRequest:
 		responseBuffer = &proto.MultiResponse{}
 		methodName = "Multi"
+	case *proto.SplitRegionRequest:
+		responseBuffer = &proto.SplitRegionResponse{}
+		methodName = "SplitRegion"
 	}
 
 	return &call{

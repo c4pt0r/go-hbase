@@ -71,7 +71,6 @@ type Scan struct {
 	lastResult   *ResultRow
 	// if region split, set startKey = lastResult.Row, but must skip the first
 	skipFirst  bool
-	err        error
 	maxRetries int
 }
 
@@ -150,10 +149,6 @@ func (s *Scan) Closed() bool {
 	return s.closed
 }
 
-func (s *Scan) Error() error {
-	return s.err
-}
-
 func (s *Scan) CreateGetFromScan(row []byte) *Get {
 	g := NewGet(row)
 	for i, family := range s.families {
@@ -169,10 +164,6 @@ func (s *Scan) CreateGetFromScan(row []byte) *Get {
 }
 
 func (s *Scan) getData(startKey []byte, retries int) ([]*ResultRow, error) {
-	if s.closed {
-		return nil, nil
-	}
-
 	server, location, err := s.getServerAndLocation(s.table, startKey)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -232,10 +223,7 @@ func (s *Scan) getData(startKey []byte, retries int) ([]*ResultRow, error) {
 
 	msg := <-cl.responseCh
 	rs, err := s.processResponse(msg)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	if s.err != nil && (isNotInRegionError(s.err) || isUnknownScannerError(s.err)) {
+	if err != nil && (isNotInRegionError(err) || isUnknownScannerError(err)) {
 		if retries <= s.maxRetries {
 			// clean this table region cache and try again
 			s.client.CleanRegionCache(s.table)
@@ -247,7 +235,6 @@ func (s *Scan) getData(startKey []byte, retries int) ([]*ResultRow, error) {
 			}
 			s.server = nil
 			s.location = nil
-			s.err = nil
 			log.Warnf("Retryint get data for %d time(s)", retries+1)
 			retrySleep(retries + 1)
 			return s.getData(startKey, retries+1)
@@ -334,8 +321,8 @@ func (s *Scan) nextBatch() int {
 		log.Errorf("scan next batch failed - [startKey=%q], %v", startKey, errors.ErrorStack(err))
 	}
 
-	// current region get 0 data, switch next region
-	if len(rs) == 0 && s.nextStartKey != nil {
+	// Current region get 0 data, try switch to next region.
+	if len(rs) == 0 && len(s.nextStartKey) > 0 {
 		// TODO: add error check, now only add a log.
 		rs, err = s.getData(s.nextStartKey, 0)
 		if err != nil {
@@ -348,6 +335,9 @@ func (s *Scan) nextBatch() int {
 }
 
 func (s *Scan) Next() *ResultRow {
+	if s.closed {
+		return nil
+	}
 	var ret *ResultRow
 	if len(s.cache) == 0 {
 		n := s.nextBatch()
@@ -399,10 +389,9 @@ func (s *Scan) getServerAndLocation(table, startRow []byte) (*connection, *Regio
 		return nil, nil, errors.Trace(err)
 	}
 
-	s.server, err = s.client.getRegionConn(s.location.Server)
+	s.server, err = s.client.getClientConn(s.location.Server)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
-
 	return s.server, s.location, nil
 }
