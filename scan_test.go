@@ -97,7 +97,9 @@ func (s *ScanTestSuit) TestScan(c *C) {
 
 	for i := 1; i <= 10000; i++ {
 		d := NewDelete([]byte(strconv.Itoa(i)))
-		s.cli.Delete(s.tableName, d)
+		b, err := s.cli.Delete(s.tableName, d)
+		c.Assert(err, IsNil)
+		c.Assert(b, IsTrue)
 	}
 }
 
@@ -234,7 +236,9 @@ func (s *ScanTestSuit) TestScanWithVersion(c *C) {
 
 	for i := 1; i <= 10000; i++ {
 		d := NewDelete([]byte(strconv.Itoa(i)))
-		s.cli.Delete(s.tableName, d)
+		b, err := s.cli.Delete(s.tableName, d)
+		c.Assert(err, IsNil)
+		c.Assert(b, IsTrue)
 	}
 }
 
@@ -278,7 +282,9 @@ func (s *ScanTestSuit) TestScanCrossMultiRegions(c *C) {
 
 	for i := 1; i <= 2000; i++ {
 		d := NewDelete([]byte(strconv.Itoa(i)))
-		s.cli.Delete(s.tableName, d)
+		b, err := s.cli.Delete(s.tableName, d)
+		c.Assert(err, IsNil)
+		c.Assert(b, IsTrue)
 	}
 }
 
@@ -348,7 +354,9 @@ func (s *ScanTestSuit) TestScanWhileSplit(c *C) {
 
 	for i := 1; i <= 3000; i++ {
 		d := NewDelete([]byte(strconv.Itoa(i)))
-		s.cli.Delete(s.tableName, d)
+		b, err := s.cli.Delete(s.tableName, d)
+		c.Assert(err, IsNil)
+		c.Assert(b, IsTrue)
 	}
 }
 
@@ -379,6 +387,8 @@ func (s *ScanTestSuit) TestScanClose(c *C) {
 
 	for i := 1; i <= 100; i++ {
 		d := NewDelete([]byte(strconv.Itoa(i)))
-		s.cli.Delete(s.tableName, d)
+		b, err := s.cli.Delete(s.tableName, d)
+		c.Assert(err, IsNil)
+		c.Assert(b, IsTrue)
 	}
 }
