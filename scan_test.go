@@ -12,6 +12,7 @@ import (
 type ScanTestSuit struct {
 	cli       HBaseClient
 	tableName string
+	oriData   map[string]map[string]string
 }
 
 var _ = Suite(&ScanTestSuit{})
@@ -32,12 +33,17 @@ func (s *ScanTestSuit) SetUpSuite(c *C) {
 	tblDesc.AddColumnDesc(cf)
 	s.cli.CreateTable(tblDesc, nil)
 
+	s.oriData = map[string]map[string]string{}
 	for i := 1; i <= 10000; i++ {
 		p := NewPut([]byte(strconv.Itoa(i)))
 		p.AddValue([]byte("cf"), []byte("q"), []byte(strconv.Itoa(i)))
 		ok, err = s.cli.Put(s.tableName, p)
 		c.Assert(ok, IsTrue)
 		c.Assert(err, IsNil)
+
+		rowKey := string(p.Row)
+		s.oriData[rowKey] = map[string]string{}
+		s.oriData[rowKey]["cf:q"] = string(p.Values[0][0])
 	}
 }
 
@@ -239,7 +245,6 @@ func (s *ScanTestSuit) TestScanCrossMultiRegions(c *C) {
 	c.Assert(cnt, Equals, 2000)
 }
 
-// TODO: add a map to check data integrity
 func (s *ScanTestSuit) TestScanWhileSplit(c *C) {
 	scan := NewScan([]byte(s.tableName), 100, s.cli)
 	cnt := 0
@@ -247,17 +252,39 @@ func (s *ScanTestSuit) TestScanWhileSplit(c *C) {
 	for i := 1; i <= 1987; i++ {
 		r := scan.Next()
 		c.Assert(r, NotNil)
+		rowKey := string(r.Row)
+		oriRow, ok := s.oriData[rowKey]
+		c.Assert(ok, IsTrue)
+		c.Assert(oriRow, NotNil)
+		for column := range r.Columns {
+			oriValue, ok := oriRow[column]
+			value := string(r.Columns[column].Value)
+			c.Assert(ok, IsTrue)
+			c.Assert(oriValue, Equals, value)
+		}
 		cnt++
 	}
 	c.Assert(cnt, Equals, 1987)
 	// At this time, regions is splitting.
 	err := s.cli.Split(s.tableName, "2048")
 	c.Assert(err, IsNil)
+	// Sleep wait Split finish.
+	time.Sleep(1 * time.Second)
 
 	// Scan is go on, and get data normally.
 	for i := 1988; i <= 2500; i++ {
 		r := scan.Next()
 		c.Assert(r, NotNil)
+		rowKey := string(r.Row)
+		oriRow, ok := s.oriData[rowKey]
+		c.Assert(ok, IsTrue)
+		c.Assert(oriRow, NotNil)
+		for column := range r.Columns {
+			oriValue, ok := oriRow[column]
+			value := string(r.Columns[column].Value)
+			c.Assert(ok, IsTrue)
+			c.Assert(oriValue, Equals, value)
+		}
 		cnt++
 	}
 	c.Assert(cnt, Equals, 2500)

@@ -101,11 +101,11 @@ func (s *AdminTestSuit) TestGetRegions(c *C) {
 	c.Assert(regions, HasLen, 4)
 }
 
-// TODO: add a map to check data integrity
 func (s *AdminTestSuit) TestTableAutoSplit(c *C) {
 	regions, err := s.cli.GetRegions([]byte(s.tableName), false)
 	c.Assert(err, IsNil)
 	c.Assert(regions, HasLen, 4)
+	oriData := map[string]map[string]string{}
 	prefixLower := 'b'
 	prefixUpper := 'f'
 	for prefix := prefixLower; prefix < prefixUpper; prefix++ {
@@ -114,6 +114,9 @@ func (s *AdminTestSuit) TestTableAutoSplit(c *C) {
 		for i := 0; i < 10000; i++ {
 			p := NewPut([]byte(fmt.Sprintf("%c_%d", prefix, i)))
 			p.AddStringValue("cf", "c", fmt.Sprintf("%c%c_%d", prefix, prefix, i))
+			rowKey := string(p.Row)
+			oriData[rowKey] = map[string]string{}
+			oriData[rowKey]["cf:c"] = string(p.Values[0][0])
 			b, err := s.cli.Put(s.tableName, p)
 			c.Assert(err, IsNil)
 			c.Assert(b, IsTrue)
@@ -140,6 +143,16 @@ func (s *AdminTestSuit) TestTableAutoSplit(c *C) {
 		for i := 0; i < 10000; i++ {
 			r := scan.Next()
 			c.Assert(r, NotNil)
+			rowKey := string(r.Row)
+			oriRow, ok := oriData[rowKey]
+			c.Assert(ok, IsTrue)
+			c.Assert(oriRow, NotNil)
+			for column := range r.Columns {
+				oriValue, ok := oriRow[column]
+				value := string(r.Columns[column].Value)
+				c.Assert(ok, IsTrue)
+				c.Assert(oriValue, Equals, value)
+			}
 			cnt++
 		}
 	}
