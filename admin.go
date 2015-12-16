@@ -3,6 +3,7 @@ package hbase
 import (
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/juju/errors"
@@ -159,7 +160,7 @@ func (c *client) CreateTable(t *TableDescriptor, splits [][]byte) error {
 		if regCnt == numRegs {
 			return nil
 		}
-		log.Info("sleep and try again")
+		log.Warnf("Retrying create table for the %d time(s)", retry+1)
 		time.Sleep(time.Duration(getPauseTime(retry)) * time.Millisecond)
 	}
 	return errors.New("create table timeout")
@@ -271,4 +272,62 @@ func (c *client) TableExists(tbl string) (bool, error) {
 	}
 
 	return found, nil
+}
+
+// Split splits region.
+// tblOrRegion table name or region(<tbl>,<endKey>,<timestamp>.<md5>).
+// splitPoint which is a key, leave "" if want to split each region automatically.
+func (c *client) Split(tblOrRegion, splitPoint string) error {
+	// Extract table name from supposing regionName.
+	tbls := strings.SplitN(tblOrRegion, ",", 2)
+	tbl := tbls[0]
+	found := false
+	var foundRegion *RegionInfo
+	c.metaScan(tbl, func(region *RegionInfo) (bool, error) {
+		if region != nil && region.Name == tblOrRegion {
+			found = true
+			foundRegion = region
+			return false, nil
+		}
+		return true, nil
+	})
+	// This is a region name, split it directly.
+	if found {
+		return c.split(foundRegion, []byte(splitPoint))
+	}
+	// This is a table name.
+	tbl = tblOrRegion
+	regions, err := c.GetRegions([]byte(tbl), false)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// Split each region.
+	for _, region := range regions {
+		err := c.split(region, []byte(splitPoint))
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
+}
+
+func (c *client) split(region *RegionInfo, splitPoint []byte) error {
+	// Not in this region, skip it.
+	if len(splitPoint) > 0 && !findKey(region, splitPoint) {
+		return nil
+	}
+	c.CleanRegionCache([]byte(region.TableName))
+	rs := NewRegionSpecifier(region.Name)
+	req := &proto.SplitRegionRequest{
+		Region: rs,
+	}
+	if len(splitPoint) > 0 {
+		req.SplitPoint = splitPoint
+	}
+	// Empty response.
+	_, err := c.regionAction(region.Server, req)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
 }

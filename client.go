@@ -76,6 +76,8 @@ type HBaseClient interface {
 	CreateTable(t *TableDescriptor, splits [][]byte) error
 	ServiceCall(table string, call *CoprocessorServiceCall) (*proto.CoprocessorServiceResponse, error)
 	LocateRegion(table, row []byte, useCache bool) (*RegionInfo, error)
+	GetRegions(table []byte, useCache bool) ([]*RegionInfo, error)
+	Split(tblOrRegion, splitPoint string) error
 	CleanRegionCache(table []byte)
 	CleanAllRegionCache()
 	Close() error
@@ -99,6 +101,10 @@ type client struct {
 
 func serverNameToAddr(server *proto.ServerName) string {
 	return fmt.Sprintf("%s:%d", server.GetHostName(), server.GetPort())
+}
+
+func cachedConnKey(addr string, srvType ServiceType) string {
+	return fmt.Sprintf("%s|%d", addr, srvType)
 }
 
 func NewClient(zkHosts []string, zkRoot string) (HBaseClient, error) {
@@ -161,13 +167,15 @@ func (c *client) init() error {
 	}
 
 	log.Debug("connect root region server...", c.rootServerName)
-	conn, err := newConnection(serverNameToAddr(c.rootServerName), false)
+	serverAddr := serverNameToAddr(c.rootServerName)
+	conn, err := newConnection(serverAddr, ClientService)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	// set buffered regionserver conn
-	c.cachedConns[serverNameToAddr(c.rootServerName)] = conn
+	// Set buffered regionserver conn.
+	cachedKey := cachedConnKey(serverAddr, ClientService)
+	c.cachedConns[cachedKey] = conn
 
 	res, _, _, err = c.zkClient.GetW(c.zkRoot + zkMasterAddrPath)
 	if err != nil {
@@ -183,9 +191,10 @@ func (c *client) init() error {
 }
 
 // get connection
-func (c *client) getConn(addr string, isMaster bool) (*connection, error) {
+func (c *client) getConn(addr string, srvType ServiceType) (*connection, error) {
+	connKey := cachedConnKey(addr, srvType)
 	c.mu.RLock()
-	conn, ok := c.cachedConns[addr]
+	conn, ok := c.cachedConns[connKey]
 	c.mu.RUnlock()
 
 	if ok {
@@ -193,24 +202,36 @@ func (c *client) getConn(addr string, isMaster bool) (*connection, error) {
 	}
 
 	var err error
-	conn, err = newConnection(addr, isMaster)
+	conn, err = newConnection(addr, srvType)
 	if err != nil {
 		return nil, errors.Errorf("create new connection failed - %v", errors.ErrorStack(err))
 	}
-
 	c.mu.Lock()
-	c.cachedConns[addr] = conn
+	c.cachedConns[connKey] = conn
 	c.mu.Unlock()
-
 	return conn, nil
 }
 
-func (c *client) getRegionConn(addr string) (*connection, error) {
-	return c.getConn(addr, false)
+func (c *client) getAdminConn(addr string) (*connection, error) {
+	return c.getConn(addr, AdminService)
+}
+
+func (c *client) getClientConn(addr string) (*connection, error) {
+	return c.getConn(addr, ClientService)
 }
 
 func (c *client) getMasterConn() (*connection, error) {
-	return c.getConn(serverNameToAddr(c.masterServerName), true)
+	return c.getConn(serverNameToAddr(c.masterServerName), MasterService)
+}
+
+func (c *client) doAction(conn *connection, req pb.Message) (chan pb.Message, error) {
+	cl := newCall(req)
+	err := conn.call(cl)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return cl.responseCh, nil
 }
 
 func (c *client) adminAction(req pb.Message) (chan pb.Message, error) {
@@ -218,14 +239,15 @@ func (c *client) adminAction(req pb.Message) (chan pb.Message, error) {
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	return c.doAction(conn, req)
+}
 
-	cl := newCall(req)
-	err = conn.call(cl)
+func (c *client) regionAction(addr string, req pb.Message) (chan pb.Message, error) {
+	conn, err := c.getAdminConn(addr)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-
-	return cl.responseCh, nil
+	return c.doAction(conn, req)
 }
 
 // http://stackoverflow.com/questions/27602013/correct-way-to-get-region-name-by-using-hbase-api
@@ -343,7 +365,7 @@ func (c *client) LocateRegion(table, row []byte, useCache bool) (*RegionInfo, er
 
 	// If cache missed or not using cache, try to get and update region info.
 	metaRegion := c.getMetaRegion()
-	conn, err := c.getRegionConn(metaRegion.Server)
+	conn, err := c.getClientConn(metaRegion.Server)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -393,6 +415,27 @@ func (c *client) LocateRegion(table, row []byte, useCache bool) (*RegionInfo, er
 	}
 
 	return nil, errors.Errorf("Couldn't find the region: [table=%s] [row=%q] [region_row=%q]", table, row, regionRow)
+}
+
+func (c *client) GetRegions(table []byte, useCache bool) ([]*RegionInfo, error) {
+	var regions []*RegionInfo
+	startKey := []byte("")
+	// Get first region.
+	region, err := c.LocateRegion(table, []byte(startKey), useCache)
+	if err != nil {
+		return nil, errors.Errorf("couldn't find any region: [table=%s] [useCache=%t]", table, useCache)
+	}
+	regions = append(regions, region)
+	startKey = region.EndKey
+	for len(startKey) > 0 {
+		region, err = c.LocateRegion(table, []byte(startKey), useCache)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		regions = append(regions, region)
+		startKey = region.EndKey
+	}
+	return regions, nil
 }
 
 func (c *client) Close() error {
