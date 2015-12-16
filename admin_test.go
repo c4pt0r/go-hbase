@@ -52,11 +52,42 @@ func (s *AdminTestSuit) TearDownTest(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (s *AdminTestSuit) TestTableExists(c *C) {
+func (s *AdminTestSuit) TestTable(c *C) {
 	b, err := s.cli.TableExists(s.tableName)
 	c.Assert(err, IsNil)
 	c.Assert(b, IsTrue)
 
+	tbl := NewTableNameWithDefaultNS(s.tableName)
+	err = s.cli.DisableTable(tbl)
+	c.Assert(err, IsNil)
+
+	// Wait for table disabled.
+	time.Sleep(3 * time.Second)
+
+	p := NewPut([]byte("key"))
+	p.AddValue([]byte("cf"), []byte("f"), []byte("value"))
+	ok, err := s.cli.Put(s.tableName, p)
+	c.Assert(err, NotNil)
+	c.Assert(ok, IsFalse)
+
+	// Wait for table enabled.
+	time.Sleep(3 * time.Second)
+
+	err = s.cli.EnableTable(tbl)
+	c.Assert(err, IsNil)
+
+	ok, err = s.cli.Put(s.tableName, p)
+	c.Assert(err, IsNil)
+	c.Assert(ok, IsTrue)
+
+	g := NewGet([]byte("key"))
+	g.AddColumn([]byte("cf"), []byte("f"))
+	r, err := s.cli.Get(s.tableName, g)
+	c.Assert(err, IsNil)
+	c.Assert(r.Columns["cf:f"].Values, HasLen, 1)
+	c.Assert(string(r.SortedColumns[0].Value), Equals, "value")
+
+	// Test check unexisted table.
 	b, err = s.cli.TableExists(s.invalidTableName)
 	c.Assert(err, IsNil)
 	c.Assert(b, IsFalse)
@@ -95,32 +126,6 @@ func (s *AdminTestSuit) TestCreateTableAsync(c *C) {
 		c.Assert(b, IsTrue)
 
 		tbl := NewTableNameWithDefaultNS(tblName)
-		err = s.cli.DisableTable(tbl)
-		c.Assert(err, IsNil)
-
-		// Wait for table disabled.
-		time.Sleep(5 * time.Second)
-
-		p := NewPut([]byte("key"))
-		p.AddValue([]byte("cf"), []byte("f"), []byte("value"))
-		ok, err := s.cli.Put(tblName, p)
-		c.Assert(err, NotNil)
-		c.Assert(ok, IsFalse)
-
-		err = s.cli.EnableTable(tbl)
-		c.Assert(err, IsNil)
-
-		ok, err = s.cli.Put(tblName, p)
-		c.Assert(err, IsNil)
-		c.Assert(ok, IsTrue)
-
-		g := NewGet([]byte("key"))
-		g.AddColumn([]byte("cf"), []byte("f"))
-		r, err := s.cli.Get(tblName, g)
-		c.Assert(err, IsNil)
-		c.Assert(r.Columns["cf:f"].Values, HasLen, 1)
-		c.Assert(string(r.SortedColumns[0].Value), Equals, "value")
-
 		err = s.cli.DisableTable(tbl)
 		c.Assert(err, IsNil)
 
