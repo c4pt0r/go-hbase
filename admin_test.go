@@ -148,10 +148,6 @@ func (s *AdminTestSuit) TestCreateTableAsync(c *C) {
 }
 
 func (s *AdminTestSuit) TestGetPauseTime(c *C) {
-	for i := range retryPauseTime {
-		c.Assert(getPauseTime(i), Equals, retryPauseTime[i]*defaultRetryWaitMs)
-	}
-
 	invalidRetry := -1
 	c.Assert(getPauseTime(invalidRetry), Equals, retryPauseTime[0]*defaultRetryWaitMs)
 	invalidRetry = len(retryPauseTime)
