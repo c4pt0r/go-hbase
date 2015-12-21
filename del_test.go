@@ -6,7 +6,8 @@ import (
 )
 
 type HBaseDelTestSuit struct {
-	cli HBaseClient
+	cli       HBaseClient
+	tableName string
 }
 
 var _ = Suite(&HBaseDelTestSuit{})
@@ -15,7 +16,9 @@ func (s *HBaseDelTestSuit) SetUpTest(c *C) {
 	var err error
 	s.cli, err = NewClient(getTestZkHosts(), "/hbase")
 	c.Assert(err, IsNil)
-	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("t2"))
+
+	s.tableName = "t2"
+	tblDesc := NewTableDesciptor(s.tableName)
 	cf := NewColumnFamilyDescriptor("cf")
 	tblDesc.AddColumnDesc(cf)
 	err = s.cli.CreateTable(tblDesc, nil)
@@ -23,10 +26,10 @@ func (s *HBaseDelTestSuit) SetUpTest(c *C) {
 }
 
 func (s *HBaseDelTestSuit) TearDownTest(c *C) {
-	err := s.cli.DisableTable(NewTableNameWithDefaultNS("t2"))
+	err := s.cli.DisableTable(s.tableName)
 	c.Assert(err, IsNil)
 
-	err = s.cli.DropTable(NewTableNameWithDefaultNS("t2"))
+	err = s.cli.DropTable(s.tableName)
 	c.Assert(err, IsNil)
 }
 
@@ -68,24 +71,24 @@ func (s *HBaseDelTestSuit) TestDelWithClient(c *C) {
 	// Test put a new value.
 	p := NewPut([]byte("test"))
 	p.AddValue([]byte("cf"), []byte("q"), []byte("val"))
-	ok, err := s.cli.Put("t2", p)
+	ok, err := s.cli.Put(s.tableName, p)
 	c.Assert(ok, IsTrue)
 	c.Assert(err, IsNil)
 
 	g := NewGet([]byte("test"))
 	g.AddStringFamily("cf")
-	r, err := s.cli.Get("t2", g)
+	r, err := s.cli.Get(s.tableName, g)
 	c.Assert(err, IsNil)
 	c.Assert(string(r.Columns["cf:q"].Value), Equals, "val")
 
 	// Test delte the value.
 	d := NewDelete([]byte("test"))
 	d.AddColumn([]byte("cf"), []byte("q"))
-	b, err := s.cli.Delete("t2", d)
+	b, err := s.cli.Delete(s.tableName, d)
 	c.Assert(err, IsNil)
 	c.Assert(b, IsTrue)
 
-	r, err = s.cli.Get("t2", g)
+	r, err = s.cli.Get(s.tableName, g)
 	c.Assert(err, IsNil)
 	c.Assert(r, IsNil)
 }

@@ -11,14 +11,16 @@ import (
 	"github.com/pingcap/go-hbase/proto"
 )
 
+const defaultNS = "default"
+
 type TableName struct {
 	namespace string
 	name      string
 }
 
-func NewTableNameWithDefaultNS(tblName string) TableName {
+func newTableNameWithDefaultNS(tblName string) TableName {
 	return TableName{
-		namespace: "default",
+		namespace: defaultNS,
 		name:      tblName,
 	}
 }
@@ -29,9 +31,9 @@ type TableDescriptor struct {
 	cfs   []*ColumnFamilyDescriptor
 }
 
-func NewTableDesciptor(tblName TableName) *TableDescriptor {
+func NewTableDesciptor(tblName string) *TableDescriptor {
 	ret := &TableDescriptor{
-		name:  tblName,
+		name:  newTableNameWithDefaultNS(tblName),
 		attrs: map[string][]byte{},
 	}
 	ret.AddAddr("IS_META", "false")
@@ -166,11 +168,11 @@ func (c *client) CreateTable(t *TableDescriptor, splits [][]byte) error {
 	return errors.New("create table timeout")
 }
 
-func (c *client) DisableTable(tblName TableName) error {
+func (c *client) DisableTable(tblName string) error {
 	req := &proto.DisableTableRequest{
 		TableName: &proto.TableName{
-			Qualifier: []byte(tblName.name),
-			Namespace: []byte(tblName.namespace),
+			Qualifier: []byte(tblName),
+			Namespace: []byte(defaultNS),
 		},
 	}
 
@@ -188,11 +190,11 @@ func (c *client) DisableTable(tblName TableName) error {
 	return nil
 }
 
-func (c *client) EnableTable(tblName TableName) error {
+func (c *client) EnableTable(tblName string) error {
 	req := &proto.EnableTableRequest{
 		TableName: &proto.TableName{
-			Qualifier: []byte(tblName.name),
-			Namespace: []byte(tblName.namespace),
+			Qualifier: []byte(tblName),
+			Namespace: []byte(defaultNS),
 		},
 	}
 
@@ -210,11 +212,11 @@ func (c *client) EnableTable(tblName TableName) error {
 	return nil
 }
 
-func (c *client) DropTable(tblName TableName) error {
+func (c *client) DropTable(tblName string) error {
 	req := &proto.DeleteTableRequest{
 		TableName: &proto.TableName{
-			Qualifier: []byte(tblName.name),
-			Namespace: []byte(tblName.namespace),
+			Qualifier: []byte(tblName),
+			Namespace: []byte(defaultNS),
 		},
 	}
 

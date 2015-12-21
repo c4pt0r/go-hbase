@@ -11,7 +11,8 @@ import (
 )
 
 type HBaseGetTestSuit struct {
-	cli HBaseClient
+	cli       HBaseClient
+	tableName string
 }
 
 var _ = Suite(&HBaseGetTestSuit{})
@@ -21,7 +22,8 @@ func (s *HBaseGetTestSuit) SetUpTest(c *C) {
 	s.cli, err = NewClient(getTestZkHosts(), "/hbase")
 	c.Assert(err, IsNil)
 
-	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("t1"))
+	s.tableName = "t1"
+	tblDesc := NewTableDesciptor(s.tableName)
 	cf := NewColumnFamilyDescriptor("cf")
 	tblDesc.AddColumnDesc(cf)
 	err = s.cli.CreateTable(tblDesc, nil)
@@ -29,10 +31,10 @@ func (s *HBaseGetTestSuit) SetUpTest(c *C) {
 }
 
 func (s *HBaseGetTestSuit) TearDownTest(c *C) {
-	err := s.cli.DisableTable(NewTableNameWithDefaultNS("t1"))
+	err := s.cli.DisableTable(s.tableName)
 	c.Assert(err, IsNil)
 
-	err = s.cli.DropTable(NewTableNameWithDefaultNS("t1"))
+	err = s.cli.DropTable(s.tableName)
 	c.Assert(err, IsNil)
 }
 
@@ -78,7 +80,7 @@ func (s *HBaseGetTestSuit) TestConcurrentGet(c *C) {
 			defer wg.Done()
 			p := NewPut([]byte("test"))
 			p.AddValue([]byte("cf"), []byte("q"), []byte(strconv.Itoa(i)))
-			b, err := s.cli.Put("t1", p)
+			b, err := s.cli.Put(s.tableName, p)
 			c.Assert(b, IsTrue)
 			c.Assert(err, IsNil)
 		}(i)
@@ -86,6 +88,6 @@ func (s *HBaseGetTestSuit) TestConcurrentGet(c *C) {
 	wg.Wait()
 
 	g := NewGet([]byte("test"))
-	_, err := s.cli.Get("t1", g)
+	_, err := s.cli.Get(s.tableName, g)
 	c.Assert(err, IsNil)
 }
