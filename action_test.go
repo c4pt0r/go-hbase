@@ -45,17 +45,17 @@ func (s *ActionTestSuit) SetUpTest(c *C) {
 	c.Assert(err, IsNil)
 
 	s.tableName = "test_action"
-	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS(s.tableName))
+	tblDesc := NewTableDesciptor(s.tableName)
 	cf := NewColumnFamilyDescriptor("cf")
 	tblDesc.AddColumnDesc(cf)
 	s.cli.CreateTable(tblDesc, nil)
 }
 
 func (s *ActionTestSuit) TearDownTest(c *C) {
-	err := s.cli.DisableTable(NewTableNameWithDefaultNS(s.tableName))
+	err := s.cli.DisableTable(s.tableName)
 	c.Assert(err, IsNil)
 
-	err = s.cli.DropTable(NewTableNameWithDefaultNS(s.tableName))
+	err = s.cli.DropTable(s.tableName)
 	c.Assert(err, IsNil)
 }
 

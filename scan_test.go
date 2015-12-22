@@ -25,18 +25,17 @@ func (s *ScanTestSuit) SetUpTest(c *C) {
 	c.Assert(err, IsNil)
 
 	s.tableName = "test_scan"
-	table := NewTableNameWithDefaultNS(s.tableName)
-	tblDesc := NewTableDesciptor(table)
+	tblDesc := NewTableDesciptor(s.tableName)
 	cf := newColumnFamilyDescriptor("cf", 3)
 	tblDesc.AddColumnDesc(cf)
 	s.cli.CreateTable(tblDesc, nil)
 }
 
 func (s *ScanTestSuit) TearDownTest(c *C) {
-	err := s.cli.DisableTable(NewTableNameWithDefaultNS(s.tableName))
+	err := s.cli.DisableTable(s.tableName)
 	c.Assert(err, IsNil)
 
-	err = s.cli.DropTable(NewTableNameWithDefaultNS(s.tableName))
+	err = s.cli.DropTable(s.tableName)
 	c.Assert(err, IsNil)
 }
 

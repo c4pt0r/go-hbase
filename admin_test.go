@@ -38,7 +38,7 @@ func (s *AdminTestSuit) SetUpTest(c *C) {
 
 	s.tableName = "test_admin"
 	s.invalidTableName = "test_admin_xxx"
-	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS(s.tableName))
+	tblDesc := NewTableDesciptor(s.tableName)
 	cf := NewColumnFamilyDescriptor("cf")
 	tblDesc.AddColumnDesc(cf)
 	err = s.cli.CreateTable(tblDesc, [][]byte{[]byte("f"), []byte("e"), []byte("c")})
@@ -46,9 +46,9 @@ func (s *AdminTestSuit) SetUpTest(c *C) {
 }
 
 func (s *AdminTestSuit) TearDownTest(c *C) {
-	err := s.cli.DisableTable(NewTableNameWithDefaultNS(s.tableName))
+	err := s.cli.DisableTable(s.tableName)
 	c.Assert(err, IsNil)
-	err = s.cli.DropTable(NewTableNameWithDefaultNS(s.tableName))
+	err = s.cli.DropTable(s.tableName)
 	c.Assert(err, IsNil)
 }
 
@@ -57,8 +57,7 @@ func (s *AdminTestSuit) TestTable(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(b, IsTrue)
 
-	tbl := NewTableNameWithDefaultNS(s.tableName)
-	err = s.cli.DisableTable(tbl)
+	err = s.cli.DisableTable(s.tableName)
 	c.Assert(err, IsNil)
 
 	// Wait for table disabled.
@@ -73,7 +72,7 @@ func (s *AdminTestSuit) TestTable(c *C) {
 	// Wait for table enabled.
 	time.Sleep(3 * time.Second)
 
-	err = s.cli.EnableTable(tbl)
+	err = s.cli.EnableTable(s.tableName)
 	c.Assert(err, IsNil)
 
 	ok, err = s.cli.Put(s.tableName, p)
@@ -93,16 +92,15 @@ func (s *AdminTestSuit) TestTable(c *C) {
 	c.Assert(b, IsFalse)
 
 	// Test disable unexisted table.
-	tbl = NewTableNameWithDefaultNS(s.invalidTableName)
-	err = s.cli.DisableTable(tbl)
+	err = s.cli.DisableTable(s.invalidTableName)
 	c.Assert(err, NotNil)
 
 	// Test enable unexisted table.
-	err = s.cli.EnableTable(tbl)
+	err = s.cli.EnableTable(s.invalidTableName)
 	c.Assert(err, NotNil)
 
 	// Test drop unexisted table.
-	err = s.cli.DropTable(tbl)
+	err = s.cli.DropTable(s.invalidTableName)
 	c.Assert(err, NotNil)
 }
 
@@ -113,8 +111,7 @@ func (s *AdminTestSuit) TestCreateTableAsync(c *C) {
 		go func(i int) {
 			defer wg.Done()
 			tblName := fmt.Sprintf("f_%d", i)
-			tbl := NewTableNameWithDefaultNS(tblName)
-			tblDesc := NewTableDesciptor(tbl)
+			tblDesc := NewTableDesciptor(tblName)
 			cf := NewColumnFamilyDescriptor("cf")
 			tblDesc.AddColumnDesc(cf)
 			tblDesc.AddColumnDesc(cf)
@@ -122,8 +119,8 @@ func (s *AdminTestSuit) TestCreateTableAsync(c *C) {
 			c.Assert(err, IsNil)
 			if b {
 				// Maybe some table is in disabled state, so we must ignore this error.
-				s.cli.DisableTable(tbl)
-				err = s.cli.DropTable(tbl)
+				s.cli.DisableTable(tblName)
+				err = s.cli.DropTable(tblName)
 				c.Assert(err, IsNil)
 			}
 			err = s.cli.CreateTable(tblDesc, nil)
@@ -138,11 +135,10 @@ func (s *AdminTestSuit) TestCreateTableAsync(c *C) {
 		c.Assert(err, IsNil)
 		c.Assert(b, IsTrue)
 
-		tbl := NewTableNameWithDefaultNS(tblName)
-		err = s.cli.DisableTable(tbl)
+		err = s.cli.DisableTable(tblName)
 		c.Assert(err, IsNil)
 
-		err = s.cli.DropTable(tbl)
+		err = s.cli.DropTable(tblName)
 		c.Assert(err, IsNil)
 	}
 }
