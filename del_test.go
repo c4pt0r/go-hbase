@@ -1,15 +1,13 @@
 package hbase
 
 import (
-	"bytes"
-
-	"github.com/c4pt0r/go-hbase/proto"
-	"github.com/ngaut/log"
-	. "gopkg.in/check.v1"
+	. "github.com/pingcap/check"
+	"github.com/pingcap/go-hbase/proto"
 )
 
 type HBaseDelTestSuit struct {
-	cli HBaseClient
+	cli       HBaseClient
+	tableName string
 }
 
 var _ = Suite(&HBaseDelTestSuit{})
@@ -17,11 +15,22 @@ var _ = Suite(&HBaseDelTestSuit{})
 func (s *HBaseDelTestSuit) SetUpTest(c *C) {
 	var err error
 	s.cli, err = NewClient(getTestZkHosts(), "/hbase")
-	c.Assert(err, Equals, nil)
-	tblDesc := NewTableDesciptor(NewTableNameWithDefaultNS("t2"))
+	c.Assert(err, IsNil)
+
+	s.tableName = "t2"
+	tblDesc := NewTableDesciptor(s.tableName)
 	cf := NewColumnFamilyDescriptor("cf")
 	tblDesc.AddColumnDesc(cf)
-	s.cli.CreateTable(tblDesc, nil)
+	err = s.cli.CreateTable(tblDesc, nil)
+	c.Assert(err, IsNil)
+}
+
+func (s *HBaseDelTestSuit) TearDownTest(c *C) {
+	err := s.cli.DisableTable(s.tableName)
+	c.Assert(err, IsNil)
+
+	err = s.cli.DropTable(s.tableName)
+	c.Assert(err, IsNil)
 }
 
 func (s *HBaseDelTestSuit) TestDel(c *C) {
@@ -31,15 +40,15 @@ func (s *HBaseDelTestSuit) TestDel(c *C) {
 	msg := d.ToProto()
 
 	p, ok := msg.(*proto.MutationProto)
-	c.Assert(ok, Equals, true)
-	c.Assert(bytes.Compare(p.Row, []byte("hello")), Equals, 0)
+	c.Assert(ok, IsTrue)
+	c.Assert(string(p.Row), Equals, "hello")
 	c.Assert(*p.MutateType, Equals, *proto.MutationProto_DELETE.Enum())
 
 	cv := p.GetColumnValue()
-	c.Assert(len(cv), Equals, 2)
+	c.Assert(cv, HasLen, 2)
 
 	for _, v := range cv {
-		c.Assert(len(v.QualifierValue), Equals, 1)
+		c.Assert(v.QualifierValue, HasLen, 1)
 		c.Assert(*v.QualifierValue[0].DeleteType, Equals, *proto.MutationProto_DELETE_FAMILY.Enum())
 	}
 
@@ -50,37 +59,36 @@ func (s *HBaseDelTestSuit) TestDel(c *C) {
 	msg = d.ToProto()
 	p, _ = msg.(*proto.MutationProto)
 	cv = p.GetColumnValue()
-	c.Assert(len(cv), Equals, 2)
+	c.Assert(cv, HasLen, 2)
 
 	for _, v := range cv {
-		c.Assert(len(v.QualifierValue), Equals, 1)
+		c.Assert(v.QualifierValue, HasLen, 1)
 		c.Assert(*v.QualifierValue[0].DeleteType, Equals, *proto.MutationProto_DELETE_MULTIPLE_VERSIONS.Enum())
 	}
 }
 
-func (s *HBaseDelTestSuit) TestWithClient(c *C) {
-	// create new
+func (s *HBaseDelTestSuit) TestDelWithClient(c *C) {
+	// Test put a new value.
 	p := NewPut([]byte("test"))
 	p.AddValue([]byte("cf"), []byte("q"), []byte("val"))
-	s.cli.Put("t2", p)
-	// check it
+	ok, err := s.cli.Put(s.tableName, p)
+	c.Assert(ok, IsTrue)
+	c.Assert(err, IsNil)
 
 	g := NewGet([]byte("test"))
 	g.AddStringFamily("cf")
-	r, err := s.cli.Get("t2", g)
-	c.Assert(err, Equals, nil)
+	r, err := s.cli.Get(s.tableName, g)
+	c.Assert(err, IsNil)
 	c.Assert(string(r.Columns["cf:q"].Value), Equals, "val")
-	log.Info(string(r.Columns["cf:q"].Value))
-	// delete it
 
+	// Test delte the value.
 	d := NewDelete([]byte("test"))
 	d.AddColumn([]byte("cf"), []byte("q"))
-	b, err := s.cli.Delete("t2", d)
-	c.Assert(err, Equals, nil)
-	c.Assert(b, Equals, true)
+	b, err := s.cli.Delete(s.tableName, d)
+	c.Assert(err, IsNil)
+	c.Assert(b, IsTrue)
 
-	// check it
-	r, err = s.cli.Get("t2", g)
-	c.Assert(err, Equals, nil)
-	c.Assert(r == nil, Equals, true)
+	r, err = s.cli.Get(s.tableName, g)
+	c.Assert(err, IsNil)
+	c.Assert(r, IsNil)
 }

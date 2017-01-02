@@ -1,11 +1,11 @@
 package hbase
 
 import (
-	"github.com/c4pt0r/go-hbase/proto"
-	pb "github.com/golang/protobuf/proto"
-
-	"fmt"
 	"strings"
+
+	pb "github.com/golang/protobuf/proto"
+	"github.com/juju/errors"
+	"github.com/pingcap/go-hbase/proto"
 )
 
 type Get struct {
@@ -34,7 +34,7 @@ func (g *Get) AddString(famqual string) error {
 	parts := strings.Split(famqual, ":")
 
 	if len(parts) > 2 {
-		return fmt.Errorf("Too many colons were found in the family:qualifier string. '%s'", famqual)
+		return errors.Errorf("Too many colons were found in the family:qualifier string. '%s'", famqual)
 	} else if len(parts) == 2 {
 		g.AddStringColumn(parts[0], parts[1])
 	} else {
@@ -44,29 +44,37 @@ func (g *Get) AddString(famqual string) error {
 	return nil
 }
 
-func (g *Get) AddStringColumn(family, qual string) {
-	g.AddColumn([]byte(family), []byte(qual))
-}
-
-func (g *Get) AddStringFamily(family string) {
-	g.AddFamily([]byte(family))
-}
-
-func (g *Get) AddColumn(family, qual []byte) {
+func (g *Get) AddColumn(family, qual []byte) *Get {
 	g.AddFamily(family)
 	g.FamilyQuals[string(family)].add(string(qual))
+	return g
 }
 
-func (g *Get) AddFamily(family []byte) {
+func (g *Get) AddStringColumn(family, qual string) *Get {
+	return g.AddColumn([]byte(family), []byte(qual))
+}
+
+func (g *Get) AddFamily(family []byte) *Get {
 	g.Families.add(string(family))
 	if _, ok := g.FamilyQuals[string(family)]; !ok {
 		g.FamilyQuals[string(family)] = newSet()
 	}
+	return g
 }
 
-func (g *Get) AddTimeRange(from uint64, to uint64) {
+func (g *Get) AddStringFamily(family string) *Get {
+	return g.AddFamily([]byte(family))
+}
+
+func (g *Get) AddTimeRange(from uint64, to uint64) *Get {
 	g.TsRangeFrom = from
 	g.TsRangeTo = to
+	return g
+}
+
+func (g *Get) SetMaxVersion(maxVersion int32) *Get {
+	g.Versions = maxVersion
+	return g
 }
 
 func (g *Get) ToProto() pb.Message {
@@ -81,12 +89,12 @@ func (g *Get) ToProto() pb.Message {
 		}
 	}
 
-	for v, _ := range g.Families {
+	for v := range g.Families {
 		col := &proto.Column{
 			Family: []byte(v),
 		}
 		var quals [][]byte
-		for qual, _ := range g.FamilyQuals[v] {
+		for qual := range g.FamilyQuals[v] {
 			quals = append(quals, []byte(qual))
 		}
 		col.Qualifier = quals

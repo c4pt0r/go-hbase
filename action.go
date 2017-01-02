@@ -1,23 +1,25 @@
 package hbase
 
 import (
-	"github.com/c4pt0r/go-hbase/proto"
 	pb "github.com/golang/protobuf/proto"
+	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/go-hbase/proto"
 )
 
 type action interface {
 	ToProto() pb.Message
 }
 
-func (c *client) do(table, row []byte, action action, useCache bool, retries int) chan pb.Message {
-	region := c.LocateRegion(table, row, useCache)
-	if region == nil {
-		return nil
+func (c *client) innerCall(table, row []byte, action action, useCache bool) (*call, error) {
+	region, err := c.LocateRegion(table, row, useCache)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
-	conn := c.getRegionConn(region.Server)
-	if conn == nil {
-		return nil
+
+	conn, err := c.getClientConn(region.Server)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
 
 	regionSpecifier := &proto.RegionSpecifier{
@@ -25,7 +27,7 @@ func (c *client) do(table, row []byte, action action, useCache bool, retries int
 		Value: []byte(region.Name),
 	}
 
-	var cl *call = nil
+	var cl *call
 	switch a := action.(type) {
 	case *Get:
 		cl = newCall(&proto.GetRequest{
@@ -43,44 +45,57 @@ func (c *client) do(table, row []byte, action action, useCache bool, retries int
 			Region: regionSpecifier,
 			Call:   a.ToProto().(*proto.CoprocessorServiceCall),
 		})
+	default:
+		return nil, errors.Errorf("Unknown action - %T - %v", action, action)
 	}
 
-	result := make(chan pb.Message)
-
-	go func() {
-		r := <-cl.responseCh
-
-		switch r.(type) {
-		case *exception:
-			if retries <= c.maxRetries {
-				// retry action, and refresh region info
-				log.Infof("Retrying action for the %d time", retries+1)
-				newr := c.do(table, row, action, false, retries+1)
-				result <- <-newr
-			} else {
-				result <- r
-			}
-			return
-		default:
-			result <- r
-		}
-	}()
-
-	if cl != nil {
-		err := conn.call(cl)
-
-		if err != nil {
-			log.Warningf("Error return while attempting call [err=%#v]", err)
-			// purge dead server
-			delete(c.cachedConns, region.Server)
-
-			if retries <= c.maxRetries {
-				// retry action
-				log.Infof("Retrying action for the %d time", retries+1)
-				c.do(table, row, action, false, retries+1)
-			}
-		}
+	err = conn.call(cl)
+	if err != nil {
+		// If failed, remove bad server conn cache.
+		cachedKey := cachedConnKey(region.Server, ClientService)
+		delete(c.cachedConns, cachedKey)
+		return nil, errors.Trace(err)
 	}
 
-	return result
+	return cl, nil
+}
+
+func (c *client) innerDo(table, row []byte, action action, useCache bool) (pb.Message, error) {
+	// Try to create and send a new resuqest call.
+	cl, err := c.innerCall(table, row, action, useCache)
+	if err != nil {
+		log.Warnf("inner call failed - %v", errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+
+	// Wait and receive the result.
+	return <-cl.responseCh, nil
+}
+
+func (c *client) do(table, row []byte, action action, useCache bool) (pb.Message, error) {
+	var (
+		result pb.Message
+		err    error
+	)
+
+LOOP:
+	for i := 0; i < c.maxRetries; i++ {
+		result, err = c.innerDo(table, row, action, useCache)
+		if err == nil {
+			switch r := result.(type) {
+			case *exception:
+				err = errors.New(r.msg)
+				// If get an execption response, clean old region cache.
+				c.CleanRegionCache(table)
+			default:
+				break LOOP
+			}
+		}
+
+		useCache = false
+		log.Warnf("Retrying action for the %d time(s), error - %v", i+1, errors.ErrorStack(err))
+		retrySleep(i + 1)
+	}
+
+	return result, errors.Trace(err)
 }

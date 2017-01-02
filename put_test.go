@@ -3,15 +3,37 @@ package hbase
 import (
 	"bytes"
 
-	"github.com/c4pt0r/go-hbase/proto"
-	"github.com/ngaut/log"
-	"github.com/pingcap/tidb/util/codec"
-	. "gopkg.in/check.v1"
+	. "github.com/pingcap/check"
+	"github.com/pingcap/go-hbase/proto"
 )
 
-type HBasePutTestSuit struct{}
+type HBasePutTestSuit struct {
+	cli       HBaseClient
+	tableName string
+}
 
 var _ = Suite(&HBasePutTestSuit{})
+
+func (s *HBasePutTestSuit) SetUpTest(c *C) {
+	var err error
+	s.cli, err = NewClient(getTestZkHosts(), "/hbase")
+	c.Assert(err, IsNil)
+
+	s.tableName = "t2"
+	tblDesc := NewTableDesciptor(s.tableName)
+	cf := NewColumnFamilyDescriptor("cf")
+	tblDesc.AddColumnDesc(cf)
+	err = s.cli.CreateTable(tblDesc, nil)
+	c.Assert(err, IsNil)
+}
+
+func (s *HBasePutTestSuit) TearDownTest(c *C) {
+	err := s.cli.DisableTable(s.tableName)
+	c.Assert(err, IsNil)
+
+	err = s.cli.DropTable(s.tableName)
+	c.Assert(err, IsNil)
+}
 
 func (s *HBasePutTestSuit) TestPut(c *C) {
 	g := NewPut([]byte("row"))
@@ -30,8 +52,6 @@ func (s *HBasePutTestSuit) TestPut(c *C) {
 }
 
 func (s *HBasePutTestSuit) TestGetPut(c *C) {
-	log.Info(codec.EncodeKey(170))
-
 	p := NewPut([]byte("1_\xff\xff"))
 	p2 := NewPut([]byte("1_\xff\xfe"))
 	p3 := NewPut([]byte("1_\xff\xee"))
@@ -42,22 +62,36 @@ func (s *HBasePutTestSuit) TestGetPut(c *C) {
 	cli, err := NewClient(getTestZkHosts(), "/hbase")
 	c.Assert(err, Equals, nil)
 
-	cli.Put("t2", p)
-	cli.Put("t2", p2)
-	cli.Put("t2", p3)
+	ok, err := cli.Put(s.tableName, p)
+	c.Assert(ok, IsTrue)
+	c.Assert(err, IsNil)
 
-	scan := NewScan([]byte("t2"), cli)
+	ok, err = cli.Put(s.tableName, p2)
+	c.Assert(ok, IsTrue)
+	c.Assert(err, IsNil)
+
+	ok, err = cli.Put(s.tableName, p3)
+	c.Assert(ok, IsTrue)
+	c.Assert(err, IsNil)
+
+	scan := NewScan([]byte(s.tableName), 100, cli)
 	scan.StartRow = []byte("1_")
 	for {
 		r := scan.Next()
 		if r == nil {
 			break
 		}
-		log.Info(r.SortedColumns[0].Row)
 	}
 
-	cli.Delete("t2", NewDelete([]byte("1_\xff\xff")))
-	cli.Delete("t2", NewDelete([]byte("1_\xff\xfe")))
-	cli.Delete("t2", NewDelete([]byte("1_\xff\xee")))
+	ok, err = cli.Delete(s.tableName, NewDelete([]byte("1_\xff\xff")))
+	c.Assert(ok, IsTrue)
+	c.Assert(err, IsNil)
 
+	ok, err = cli.Delete(s.tableName, NewDelete([]byte("1_\xff\xfe")))
+	c.Assert(ok, IsTrue)
+	c.Assert(err, IsNil)
+
+	ok, err = cli.Delete(s.tableName, NewDelete([]byte("1_\xff\xee")))
+	c.Assert(ok, IsTrue)
+	c.Assert(err, IsNil)
 }

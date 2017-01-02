@@ -1,10 +1,11 @@
 package hbase
 
 import (
-	"github.com/c4pt0r/go-hbase/proto"
-	pb "github.com/golang/protobuf/proto"
-
 	"bytes"
+	"math"
+
+	pb "github.com/golang/protobuf/proto"
+	"github.com/pingcap/go-hbase/proto"
 )
 
 type Put struct {
@@ -12,6 +13,7 @@ type Put struct {
 	Families   [][]byte
 	Qualifiers [][][]byte
 	Values     [][][]byte
+	Timestamp  uint64
 }
 
 func NewPut(row []byte) *Put {
@@ -27,9 +29,8 @@ func (p *Put) GetRow() []byte {
 	return p.Row
 }
 
-func (p *Put) AddValue(family, qual, value []byte) {
+func (p *Put) AddValue(family, qual, value []byte) *Put {
 	pos := p.posOfFamily(family)
-
 	if pos == -1 {
 		p.Families = append(p.Families, family)
 		p.Qualifiers = append(p.Qualifiers, make([][]byte, 0))
@@ -40,10 +41,20 @@ func (p *Put) AddValue(family, qual, value []byte) {
 
 	p.Qualifiers[pos] = append(p.Qualifiers[pos], qual)
 	p.Values[pos] = append(p.Values[pos], value)
+	return p
 }
 
-func (p *Put) AddStringValue(family, column, value string) {
-	p.AddValue([]byte(family), []byte(column), []byte(value))
+func (p *Put) AddStringValue(family, column, value string) *Put {
+	return p.AddValue([]byte(family), []byte(column), []byte(value))
+}
+
+func (p *Put) AddTimestamp(ts uint64) *Put {
+	if ts == 0 {
+		p.Timestamp = math.MaxInt64
+	} else {
+		p.Timestamp = ts
+	}
+	return p
 }
 
 func (p *Put) posOfFamily(family []byte) int {
@@ -66,10 +77,11 @@ func (p *Put) ToProto() pb.Message {
 			Family: family,
 		}
 
-		for j, _ := range p.Qualifiers[i] {
+		for j := range p.Qualifiers[i] {
 			cv.QualifierValue = append(cv.QualifierValue, &proto.MutationProto_ColumnValue_QualifierValue{
 				Qualifier: p.Qualifiers[i][j],
 				Value:     p.Values[i][j],
+				Timestamp: pb.Uint64(p.Timestamp),
 			})
 		}
 

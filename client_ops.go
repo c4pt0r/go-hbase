@@ -1,55 +1,67 @@
 package hbase
 
 import (
-	"github.com/c4pt0r/go-hbase/proto"
 	"github.com/juju/errors"
+	"github.com/pingcap/go-hbase/proto"
 )
 
 func (c *client) Delete(table string, del *Delete) (bool, error) {
-	ch := c.do([]byte(table), del.GetRow(), del, true, 0)
+	response, err := c.do([]byte(table), del.GetRow(), del, true)
+	if err != nil {
+		return false, errors.Trace(err)
+	}
 
-	response := <-ch
 	switch r := response.(type) {
 	case *proto.MutateResponse:
 		return r.GetProcessed(), nil
 	}
-	return false, errors.Errorf("No valid response seen [response: %#v]", response)
+	return false, errors.Errorf("Invalid response seen [response: %#v]", response)
 }
 
 func (c *client) Get(table string, get *Get) (*ResultRow, error) {
-	ch := c.do([]byte(table), get.GetRow(), get, true, 0)
-	if ch == nil {
-		return nil, errors.Errorf("Create region server connection failed")
+	response, err := c.do([]byte(table), get.GetRow(), get, true)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
 
-	response := <-ch
 	switch r := response.(type) {
 	case *proto.GetResponse:
-		return NewResultRow(r.GetResult()), nil
+		res := r.GetResult()
+		if res == nil {
+			return nil, errors.Errorf("Empty response: [table=%s] [row=%q]", table, get.GetRow())
+		}
+
+		return NewResultRow(res), nil
 	case *exception:
 		return nil, errors.New(r.msg)
 	}
-	return nil, errors.Errorf("No valid response seen [response: %#v]", response)
+	return nil, errors.Errorf("Invalid response seen [response: %#v]", response)
 }
 
 func (c *client) Put(table string, put *Put) (bool, error) {
-	ch := c.do([]byte(table), put.GetRow(), put, true, 0)
-	response := <-ch
+	response, err := c.do([]byte(table), put.GetRow(), put, true)
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+
 	switch r := response.(type) {
 	case *proto.MutateResponse:
 		return r.GetProcessed(), nil
 	}
-	return false, errors.Errorf("No valid response seen [response: %#v]", response)
+	return false, errors.Errorf("Invalid response seen [response: %#v]", response)
 }
 
 func (c *client) ServiceCall(table string, call *CoprocessorServiceCall) (*proto.CoprocessorServiceResponse, error) {
-	ch := c.do([]byte(table), call.Row, call, true, 0)
-	response := <-ch
+	response, err := c.do([]byte(table), call.Row, call, true)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
 	switch r := response.(type) {
 	case *proto.CoprocessorServiceResponse:
 		return r, nil
 	case *exception:
 		return nil, errors.New(r.msg)
 	}
-	return nil, errors.Errorf("No valid response seen [response: %#v]", response)
+	return nil, errors.Errorf("Invalid response seen [response: %#v]", response)
 }

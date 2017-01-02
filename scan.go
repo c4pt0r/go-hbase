@@ -3,31 +3,62 @@ package hbase
 import (
 	"bytes"
 
-	"github.com/c4pt0r/go-hbase/proto"
 	pb "github.com/golang/protobuf/proto"
+	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/go-hbase/proto"
 )
 
-func incrementByteString(d []byte, i int) []byte {
-	r := make([]byte, len(d))
-	copy(r, d)
-	// in case of: len(nil) - 1, e.g: scan(startKey, nil)
-	if i < 0 {
-		return append(make([]byte, 1), r...)
+// nextKey returns the next key in byte-order.
+// for example:
+// nil -> [0]
+// [] -> [0]
+// [0] -> [1]
+// [1, 2, 3] -> [1, 2, 4]
+// [1, 255] -> [2, 0]
+// [255] -> [0, 0]
+func nextKey(data []byte) []byte {
+	// nil or []byte{}
+	dataLen := len(data)
+	if dataLen == 0 {
+		return []byte{0}
 	}
-	r[i]++
-	return r
+
+	// Check and process carry bit.
+	i := dataLen - 1
+	data[i]++
+	for i > 0 {
+		if data[i] == 0 {
+			i--
+			data[i]++
+		} else {
+			break
+		}
+	}
+
+	// Check whether need to add another byte for carry bit,
+	// like [255] -> [0, 0]
+	if data[i] == 0 {
+		data = append([]byte{0}, data...)
+	}
+
+	return data
 }
 
+const (
+	defaultScanMaxRetries = 3
+)
+
 type Scan struct {
-	client       *client
-	id           uint64
-	table        []byte
+	client *client
+	id     uint64
+	table  []byte
+	// row key
 	StartRow     []byte
 	StopRow      []byte
 	families     [][]byte
 	qualifiers   [][][]byte
-	nextStartRow []byte
+	nextStartKey []byte
 	numCached    int
 	closed       bool
 	location     *RegionInfo
@@ -37,6 +68,10 @@ type Scan struct {
 	MaxVersions  uint32
 	TsRangeFrom  uint64
 	TsRangeTo    uint64
+	lastResult   *ResultRow
+	// if region split, set startKey = lastResult.Row, but must skip the first
+	skipFirst  bool
+	maxRetries int
 }
 
 func NewScan(table []byte, batchSize int, c HBaseClient) *Scan {
@@ -46,45 +81,50 @@ func NewScan(table []byte, batchSize int, c HBaseClient) *Scan {
 	return &Scan{
 		client:       c.(*client),
 		table:        table,
-		nextStartRow: nil,
+		nextStartKey: nil,
 		families:     make([][]byte, 0),
 		qualifiers:   make([][][]byte, 0),
 		numCached:    batchSize,
 		closed:       false,
 		attrs:        make(map[string][]byte),
+		maxRetries:   defaultScanMaxRetries,
 	}
 }
 
-func (s *Scan) Close() {
-	if s.closed == false {
-		s.closeScan(s.server, s.location, s.id)
-		s.closed = true
+func (s *Scan) Close() error {
+	if s.closed {
+		return nil
 	}
+
+	err := s.closeScan(s.server, s.location, s.id)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	s.closed = true
+	return nil
+}
+
+func (s *Scan) AddColumn(family, qual []byte) {
+	s.AddFamily(family)
+	pos := s.posOfFamily(family)
+	s.qualifiers[pos] = append(s.qualifiers[pos], qual)
 }
 
 func (s *Scan) AddStringColumn(family, qual string) {
 	s.AddColumn([]byte(family), []byte(qual))
 }
 
-func (s *Scan) AddStringFamily(family string) {
-	s.AddFamily([]byte(family))
-}
-
-func (s *Scan) AddColumn(family, qual []byte) {
-	s.AddFamily(family)
-
-	pos := s.posOfFamily(family)
-
-	s.qualifiers[pos] = append(s.qualifiers[pos], qual)
-}
-
 func (s *Scan) AddFamily(family []byte) {
 	pos := s.posOfFamily(family)
-
 	if pos == -1 {
 		s.families = append(s.families, family)
 		s.qualifiers = append(s.qualifiers, make([][]byte, 0))
 	}
+}
+
+func (s *Scan) AddStringFamily(family string) {
+	s.AddFamily([]byte(family))
 }
 
 func (s *Scan) posOfFamily(family []byte) int {
@@ -98,6 +138,11 @@ func (s *Scan) posOfFamily(family []byte) int {
 
 func (s *Scan) AddAttr(name string, val []byte) {
 	s.attrs[name] = val
+}
+
+func (s *Scan) AddTimeRange(from uint64, to uint64) {
+	s.TsRangeFrom = from
+	s.TsRangeTo = to
 }
 
 func (s *Scan) Closed() bool {
@@ -118,12 +163,11 @@ func (s *Scan) CreateGetFromScan(row []byte) *Get {
 	return g
 }
 
-func (s *Scan) getData(nextStart []byte) []*ResultRow {
-	if s.closed {
-		return nil
+func (s *Scan) getData(startKey []byte, retries int) ([]*ResultRow, error) {
+	server, location, err := s.getServerAndLocation(s.table, startKey)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
-
-	server, location := s.getServerAndLocation(s.table, nextStart)
 
 	req := &proto.ScanRequest{
 		Region: &proto.RegionSpecifier{
@@ -133,6 +177,7 @@ func (s *Scan) getData(nextStart []byte) []*ResultRow {
 		NumberOfRows: pb.Uint32(uint32(s.numCached)),
 		Scan:         &proto.Scan{},
 	}
+
 	// set attributes
 	var attrs []*proto.NameBytesPair
 	for k, v := range s.attrs {
@@ -149,18 +194,18 @@ func (s *Scan) getData(nextStart []byte) []*ResultRow {
 	if s.id > 0 {
 		req.ScannerId = pb.Uint64(s.id)
 	}
-	if s.StartRow != nil {
-		req.Scan.StartRow = s.StartRow
-	}
+	req.Scan.StartRow = startKey
 	if s.StopRow != nil {
 		req.Scan.StopRow = s.StopRow
 	}
 	if s.MaxVersions > 0 {
 		req.Scan.MaxVersions = &s.MaxVersions
 	}
-	if s.TsRangeFrom >= 0 && s.TsRangeTo > 0 && s.TsRangeTo > s.TsRangeFrom {
-		req.Scan.TimeRange.From = &s.TsRangeFrom
-		req.Scan.TimeRange.To = &s.TsRangeTo
+	if s.TsRangeTo > s.TsRangeFrom {
+		req.Scan.TimeRange = &proto.TimeRange{
+			From: pb.Uint64(s.TsRangeFrom),
+			To:   pb.Uint64(s.TsRangeTo),
+		}
 	}
 
 	for i, v := range s.families {
@@ -169,34 +214,57 @@ func (s *Scan) getData(nextStart []byte) []*ResultRow {
 			Qualifier: s.qualifiers[i],
 		})
 	}
+
 	cl := newCall(req)
-	server.call(cl)
-	select {
-	case msg := <-cl.responseCh:
-		return s.processResponse(msg)
+	err = server.call(cl)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
+
+	msg := <-cl.responseCh
+	rs, err := s.processResponse(msg)
+	if err != nil && (isNotInRegionError(err) || isUnknownScannerError(err)) {
+		if retries <= s.maxRetries {
+			// clean this table region cache and try again
+			s.client.CleanRegionCache(s.table)
+			// create new scanner and set startRow to lastResult
+			s.id = 0
+			if s.lastResult != nil {
+				startKey = s.lastResult.Row
+				s.skipFirst = true
+			}
+			s.server = nil
+			s.location = nil
+			log.Warnf("Retryint get data for %d time(s)", retries+1)
+			retrySleep(retries + 1)
+			return s.getData(startKey, retries+1)
+		}
+	}
+	return rs, nil
 }
 
-var lastRegionRows int = 0
-
-func (s *Scan) processResponse(response pb.Message) []*ResultRow {
+func (s *Scan) processResponse(response pb.Message) ([]*ResultRow, error) {
 	var res *proto.ScanResponse
 	switch r := response.(type) {
 	case *proto.ScanResponse:
 		res = r
+	case *exception:
+		return nil, errors.New(r.msg)
 	default:
-		log.Errorf("Invalid response returned: %T", response)
-		return nil
+		return nil, errors.Errorf("Invalid response seen [response: %#v]", response)
+	}
+
+	// Check whether response is nil.
+	if res == nil {
+		return nil, errors.Errorf("Empty response: [table=%s] [StartRow=%q] [StopRow=%q] ", s.table, s.StartRow, s.StopRow)
 	}
 
 	nextRegion := true
-	s.nextStartRow = nil
+	s.nextStartKey = nil
 	s.id = res.GetScannerId()
 
 	results := res.GetResults()
 	n := len(results)
-
-	lastRegionRows += n
 
 	if (n == s.numCached) ||
 		len(s.location.EndKey) == 0 ||
@@ -205,44 +273,71 @@ func (s *Scan) processResponse(response pb.Message) []*ResultRow {
 		nextRegion = false
 	}
 
-	if n < s.numCached {
-		s.nextStartRow = incrementByteString(s.location.EndKey, len(s.location.EndKey)-1)
-	}
-
+	var err error
 	if nextRegion {
-		s.closeScan(s.server, s.location, s.id)
+		s.nextStartKey = s.location.EndKey
+		err = s.closeScan(s.server, s.location, s.id)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
 		s.server = nil
 		s.location = nil
 		s.id = 0
-		lastRegionRows = 0
 	}
 
 	if n == 0 && !nextRegion {
-		s.Close()
+		err = s.Close()
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+	}
+
+	if s.skipFirst {
+		results = results[1:]
+		s.skipFirst = false
+		n = len(results)
 	}
 
 	tbr := make([]*ResultRow, n)
 	for i, v := range results {
-		tbr[i] = NewResultRow(v)
+		if v != nil {
+			tbr[i] = NewResultRow(v)
+		}
 	}
 
-	return tbr
+	return tbr, nil
 }
 
 func (s *Scan) nextBatch() int {
-	startRow := s.nextStartRow
-	if startRow == nil {
-		startRow = s.StartRow
+	startKey := s.nextStartKey
+	if startKey == nil {
+		startKey = s.StartRow
 	}
-	rs := s.getData(startRow)
-	if rs == nil || len(rs) == 0 {
-		return 0
+
+	// Notice: ignore error here.
+	// TODO: add error check, now only add a log.
+	rs, err := s.getData(startKey, 0)
+	if err != nil {
+		log.Errorf("scan next batch failed - [startKey=%q], %v", startKey, errors.ErrorStack(err))
 	}
+
+	// Current region get 0 data, try switch to next region.
+	if len(rs) == 0 && len(s.nextStartKey) > 0 {
+		// TODO: add error check, now only add a log.
+		rs, err = s.getData(s.nextStartKey, 0)
+		if err != nil {
+			log.Errorf("scan next batch failed - [startKey=%q], %v", s.nextStartKey, errors.ErrorStack(err))
+		}
+	}
+
 	s.cache = rs
 	return len(s.cache)
 }
 
 func (s *Scan) Next() *ResultRow {
+	if s.closed {
+		return nil
+	}
 	var ret *ResultRow
 	if len(s.cache) == 0 {
 		n := s.nextBatch()
@@ -251,12 +346,18 @@ func (s *Scan) Next() *ResultRow {
 			return nil
 		}
 	}
+
 	ret = s.cache[0]
-	s.cache = s.cache[1:len(s.cache)]
+	s.lastResult = ret
+	s.cache = s.cache[1:]
 	return ret
 }
 
-func (s *Scan) closeScan(server *connection, location *RegionInfo, id uint64) {
+func (s *Scan) closeScan(server *connection, location *RegionInfo, id uint64) error {
+	if server == nil || location == nil {
+		return nil
+	}
+
 	req := &proto.ScanRequest{
 		Region: &proto.RegionSpecifier{
 			Type:  proto.RegionSpecifier_REGION_NAME.Enum(),
@@ -265,21 +366,32 @@ func (s *Scan) closeScan(server *connection, location *RegionInfo, id uint64) {
 		ScannerId:    pb.Uint64(id),
 		CloseScanner: pb.Bool(true),
 	}
+
 	cl := newCall(req)
-	server.call(cl)
+	err := server.call(cl)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	// TODO: add exception check.
 	<-cl.responseCh
+	return nil
 }
 
-func (s *Scan) getServerAndLocation(table, startRow []byte) (server *connection, location *RegionInfo) {
+func (s *Scan) getServerAndLocation(table, startRow []byte) (*connection, *RegionInfo, error) {
 	if s.server != nil && s.location != nil {
-		server = s.server
-		location = s.location
-		return
+		return s.server, s.location, nil
 	}
-	location = s.client.LocateRegion(table, startRow, true)
-	server = s.client.getRegionConn(location.Server)
 
-	s.server = server
-	s.location = location
-	return
+	var err error
+	s.location, err = s.client.LocateRegion(table, startRow, true)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
+
+	s.server, err = s.client.getClientConn(s.location.Server)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
+	return s.server, s.location, nil
 }

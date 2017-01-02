@@ -1,8 +1,10 @@
 package hbase
 
 import (
-	"github.com/c4pt0r/go-hbase/proto"
+	"strings"
+
 	pb "github.com/golang/protobuf/proto"
+	"github.com/pingcap/go-hbase/proto"
 )
 
 type call struct {
@@ -17,9 +19,16 @@ type exception struct {
 	msg string
 }
 
+func isNotInRegionError(err error) bool {
+	return strings.Contains(err.Error(), "org.apache.hadoop.hbase.NotServingRegionException")
+}
+func isUnknownScannerError(err error) bool {
+	return strings.Contains(err.Error(), "org.apache.hadoop.hbase.UnknownScannerException")
+}
+
 func (m *exception) Reset()         { *m = exception{} }
 func (m *exception) String() string { return m.msg }
-func (*exception) ProtoMessage()    {}
+func (m *exception) ProtoMessage()  {}
 
 func newCall(request pb.Message) *call {
 	var responseBuffer pb.Message
@@ -47,9 +56,18 @@ func newCall(request pb.Message) *call {
 	case *proto.DisableTableRequest:
 		responseBuffer = &proto.DisableTableResponse{}
 		methodName = "DisableTable"
+	case *proto.EnableTableRequest:
+		responseBuffer = &proto.EnableTableResponse{}
+		methodName = "EnableTable"
 	case *proto.DeleteTableRequest:
 		responseBuffer = &proto.DeleteTableResponse{}
 		methodName = "DeleteTable"
+	case *proto.MultiRequest:
+		responseBuffer = &proto.MultiResponse{}
+		methodName = "Multi"
+	case *proto.SplitRegionRequest:
+		responseBuffer = &proto.SplitRegionResponse{}
+		methodName = "SplitRegion"
 	}
 
 	return &call{
@@ -70,10 +88,10 @@ func (c *call) complete(err error, response []byte) {
 		return
 	}
 
-	err2 := pb.Unmarshal(response, c.responseBuffer)
-	if err2 != nil {
+	err = pb.Unmarshal(response, c.responseBuffer)
+	if err != nil {
 		c.responseCh <- &exception{
-			msg: err2.Error(),
+			msg: err.Error(),
 		}
 		return
 	}
