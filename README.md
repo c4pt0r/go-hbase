@@ -1,4 +1,4 @@
-#go-hbase
+[UNMAINTAINED]
 
 [![Build Status](https://travis-ci.org/pingcap/go-hbase.svg)](https://travis-ci.org/pingcap/go-hbase)
 
